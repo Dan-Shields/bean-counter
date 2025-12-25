@@ -5,7 +5,7 @@
         <ion-buttons slot="start">
           <ion-back-button :default-href="`/group/${groupId}`"></ion-back-button>
         </ion-buttons>
-        <ion-title>{{ isEditing ? 'Edit Expense' : 'New Expense' }}</ion-title>
+        <ion-title>{{ pageTitle }}</ion-title>
         <ion-buttons slot="end">
           <ion-button v-if="isEditing" color="danger" @click="confirmDelete">
             <ion-icon :icon="trashOutline" slot="icon-only"></ion-icon>
@@ -30,12 +30,24 @@
       </div>
 
       <ion-list v-else>
+        <ion-segment v-model="form.type" class="type-segment">
+          <ion-segment-button value="expense">
+            <ion-label>Expense</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="repayment">
+            <ion-label>Repayment</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="income">
+            <ion-label>Income</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+
         <ion-item>
           <ion-input
             v-model="form.title"
-            label="Title"
+            :label="form.type === 'repayment' ? 'Note (optional)' : 'Title'"
             label-placement="stacked"
-            placeholder="e.g., Dinner, Groceries, Taxi"
+            :placeholder="titlePlaceholder"
           ></ion-input>
         </ion-item>
 
@@ -45,7 +57,7 @@
             @ionFocus="() => setEditingAmount(true)"
             @ionBlur="() => setEditingAmount(false)"
             @ionInput="(e: CustomEvent) => updateAmount(e.detail.value)"
-            label="Amount (optional)"
+            :label="form.type === 'repayment' ? 'Amount' : 'Amount (optional)'"
             label-placement="stacked"
             type="text"
             inputmode="decimal"
@@ -90,7 +102,7 @@
         <ion-item>
           <ion-select
             v-model="form.payer_id"
-            label="Paid by"
+            :label="payerLabel"
             label-placement="stacked"
             interface="action-sheet"
           >
@@ -104,14 +116,33 @@
           </ion-select>
         </ion-item>
 
-        <ion-list-header>
-          <ion-label>Split between</ion-label>
+        <!-- Recipient for repayment -->
+        <ion-item v-if="form.type === 'repayment'">
+          <ion-select
+            v-model="repaymentRecipientId"
+            label="To"
+            label-placement="stacked"
+            interface="action-sheet"
+          >
+            <ion-select-option
+              v-for="member in members"
+              :key="member.id"
+              :value="member.id"
+              :disabled="member.id === form.payer_id"
+            >
+              {{ member.name }}{{ member.id === currentMemberId ? ' (You)' : '' }}
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-list-header v-if="form.type !== 'repayment'">
+          <ion-label>{{ form.type === 'income' ? 'Split income between' : 'Split between' }}</ion-label>
           <ion-button v-if="hasManualAmount" fill="clear" size="small" @click="toggleSplitMode">
             {{ splitMode === 'parts' ? 'Use exact amounts' : 'Use parts' }}
           </ion-button>
         </ion-list-header>
 
-        <ion-item v-for="split in form.splits" :key="split.member_id">
+        <ion-item v-for="split in form.splits" :key="split.member_id" v-show="form.type !== 'repayment'">
           <ion-checkbox
             slot="start"
             :checked="split.enabled"
@@ -151,7 +182,7 @@
           </div>
         </ion-item>
 
-        <div class="split-summary">
+        <div v-if="form.type !== 'repayment'" class="split-summary">
           <p v-if="hasManualAmount && splitMode === 'parts'">
             Total parts: {{ totalParts }} &middot;
             Each part: {{ formatCurrency(amountPerPart, form.currency) }}
@@ -204,6 +235,8 @@ import {
   IonSpinner,
   IonModal,
   IonDatetime,
+  IonSegment,
+  IonSegmentButton,
   toastController,
   alertController,
 } from '@ionic/vue';
@@ -211,7 +244,7 @@ import { alertCircleOutline, trashOutline } from 'ionicons/icons';
 import { useGroups } from '@/composables/useGroups';
 import { useExpenses } from '@/composables/useExpenses';
 import { formatCurrency } from '@/utils/currency';
-import type { Group, Member, ExpenseFormData } from '@/types';
+import type { Group, Member, ExpenseFormData, TransactionType } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -232,10 +265,12 @@ const splitMode = ref<'parts' | 'exact'>('parts');
 const editingAmount = ref(false);
 const editingSplitId = ref<string | null>(null);
 const currentMemberId = ref<string | null>(null);
+const repaymentRecipientId = ref<string>('');
 
 let unsubscribe: (() => void) | null = null;
 
 const form = ref<ExpenseFormData>({
+  type: 'expense',
   title: '',
   date: new Date().toISOString().split('T')[0],
   category: '',
@@ -243,6 +278,37 @@ const form = ref<ExpenseFormData>({
   currency: 'EUR',
   payer_id: '',
   splits: [],
+});
+
+const pageTitle = computed(() => {
+  if (isEditing.value) {
+    switch (form.value.type) {
+      case 'repayment': return 'Edit Repayment';
+      case 'income': return 'Edit Income';
+      default: return 'Edit Expense';
+    }
+  }
+  switch (form.value.type) {
+    case 'repayment': return 'New Repayment';
+    case 'income': return 'New Income';
+    default: return 'New Expense';
+  }
+});
+
+const payerLabel = computed(() => {
+  switch (form.value.type) {
+    case 'repayment': return 'From';
+    case 'income': return 'Received by';
+    default: return 'Paid by';
+  }
+});
+
+const titlePlaceholder = computed(() => {
+  switch (form.value.type) {
+    case 'repayment': return 'e.g., Settling up';
+    case 'income': return 'e.g., Refund, Deposit return';
+    default: return 'e.g., Dinner, Groceries, Taxi';
+  }
 });
 
 const hasManualAmount = computed(() => form.value.amount > 0);
@@ -260,12 +326,16 @@ const effectiveAmount = computed(() => {
 });
 
 const isValid = computed(() => {
-  return (
-    form.value.title.trim() !== '' &&
-    effectiveAmount.value > 0 &&
-    form.value.payer_id !== '' &&
-    form.value.splits.some((s) => s.enabled)
-  );
+  const hasTitle = form.value.type === 'repayment' || form.value.title.trim() !== '';
+  const hasAmount = form.value.type === 'repayment' ? form.value.amount > 0 : effectiveAmount.value > 0;
+  const hasPayer = form.value.payer_id !== '';
+
+  if (form.value.type === 'repayment') {
+    // For repayment: need payer, recipient, and amount
+    return hasTitle && hasAmount && hasPayer && repaymentRecipientId.value !== '' && repaymentRecipientId.value !== form.value.payer_id;
+  }
+  // For expense/income: need title, amount, payer, and at least one split
+  return hasTitle && hasAmount && hasPayer && form.value.splits.some((s) => s.enabled);
 });
 
 const totalParts = computed(() => {
@@ -325,12 +395,18 @@ onMounted(async () => {
         if (expense.deleted_at) {
           isDeleted.value = true;
         } else {
+          form.value.type = expense.type || 'expense';
           form.value.title = expense.title;
           form.value.date = expense.date;
           form.value.category = expense.category || '';
           form.value.amount = expense.amount;
           form.value.currency = expense.currency;
           form.value.payer_id = expense.payer_id;
+
+          // For repayment, extract the recipient from the single split
+          if (form.value.type === 'repayment' && expense.splits.length > 0) {
+            repaymentRecipientId.value = expense.splits[0].member_id;
+          }
 
           // Set splits from expense
           form.value.splits = members.value.map((m) => {
@@ -474,30 +550,46 @@ async function saveExpense() {
   isSaving.value = true;
 
   try {
-    // Prepare form data based on split mode
-    const formData: ExpenseFormData = {
-      ...form.value,
-      amount: effectiveAmount.value,
-      splits: form.value.splits.map((split) => {
-        if (!split.enabled) {
-          return { ...split };
-        }
+    let formData: ExpenseFormData;
 
-        if (hasManualAmount.value && splitMode.value === 'parts') {
-          return {
-            ...split,
-            parts: split.parts || 1,
-            exact_amount: undefined,
-          };
-        } else {
-          return {
-            ...split,
-            parts: undefined,
-            exact_amount: split.exact_amount,
-          };
-        }
-      }),
-    };
+    if (form.value.type === 'repayment') {
+      // For repayment: create a single split for the recipient
+      formData = {
+        ...form.value,
+        title: form.value.title || 'Repayment',
+        amount: form.value.amount,
+        splits: [{
+          member_id: repaymentRecipientId.value,
+          exact_amount: form.value.amount,
+          enabled: true,
+        }],
+      };
+    } else {
+      // For expense/income: use normal split logic
+      formData = {
+        ...form.value,
+        amount: effectiveAmount.value,
+        splits: form.value.splits.map((split) => {
+          if (!split.enabled) {
+            return { ...split };
+          }
+
+          if (hasManualAmount.value && splitMode.value === 'parts') {
+            return {
+              ...split,
+              parts: split.parts || 1,
+              exact_amount: undefined,
+            };
+          } else {
+            return {
+              ...split,
+              parts: undefined,
+              exact_amount: split.exact_amount,
+            };
+          }
+        }),
+      };
+    }
 
     let success: boolean;
     if (isEditing.value && expenseId) {
@@ -508,9 +600,10 @@ async function saveExpense() {
       success = result !== null;
     }
 
+    const typeLabel = form.value.type === 'repayment' ? 'Repayment' : form.value.type === 'income' ? 'Income' : 'Expense';
     if (success) {
       const toast = await toastController.create({
-        message: isEditing.value ? 'Expense updated' : 'Expense created',
+        message: isEditing.value ? `${typeLabel} updated` : `${typeLabel} created`,
         duration: 2000,
         color: 'success',
       });
@@ -573,6 +666,10 @@ async function confirmDelete() {
 </script>
 
 <style scoped>
+.type-segment {
+  margin: 8px 16px;
+}
+
 .loading-state {
   display: flex;
   justify-content: center;

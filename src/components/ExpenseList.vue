@@ -12,15 +12,38 @@
     <ion-list v-if="filteredExpenses.length > 0">
       <ion-item-sliding v-for="expense in filteredExpenses" :key="expense.id">
         <ion-item button @click="$emit('edit', expense.id)">
+          <ion-icon
+            v-if="expense.type === 'repayment'"
+            :icon="swapHorizontalOutline"
+            slot="start"
+            color="success"
+            class="type-icon"
+          ></ion-icon>
+          <ion-icon
+            v-else-if="expense.type === 'income'"
+            :icon="walletOutline"
+            slot="start"
+            color="tertiary"
+            class="type-icon"
+          ></ion-icon>
           <ion-label>
             <h2>{{ expense.title }}</h2>
             <p>
               {{ formatDate(expense.date) }} &middot;
-              Paid by {{ expense.payer.name }}<span v-if="expense.payer_id === currentMemberId" class="you-indicator"> (You)</span>
+              <template v-if="expense.type === 'repayment'">
+                {{ expense.payer.name }}<span v-if="expense.payer_id === currentMemberId" class="you-indicator"> (You)</span>
+                → {{ getRecipientName(expense) }}
+              </template>
+              <template v-else-if="expense.type === 'income'">
+                Received by {{ expense.payer.name }}<span v-if="expense.payer_id === currentMemberId" class="you-indicator"> (You)</span>
+              </template>
+              <template v-else>
+                Paid by {{ expense.payer.name }}<span v-if="expense.payer_id === currentMemberId" class="you-indicator"> (You)</span>
+              </template>
             </p>
           </ion-label>
-          <ion-note slot="end" class="amount">
-            {{ formatAmount(expense.amount, expense.currency) }}
+          <ion-note slot="end" class="amount" :class="{ income: expense.type === 'income' }">
+            {{ expense.type === 'income' ? '+' : '' }}{{ formatAmount(expense.amount, expense.currency) }}
           </ion-note>
         </ion-item>
 
@@ -54,7 +77,7 @@ import {
   IonSegment,
   IonSegmentButton,
 } from '@ionic/vue';
-import { trashOutline, receiptOutline } from 'ionicons/icons';
+import { trashOutline, receiptOutline, swapHorizontalOutline, walletOutline } from 'ionicons/icons';
 import { formatCurrency } from '@/utils/currency';
 import type { ExpenseWithDetails, Member } from '@/types';
 
@@ -94,6 +117,16 @@ function formatDate(dateStr: string): string {
 function formatAmount(amount: number, currency: string): string {
   return formatCurrency(amount, currency);
 }
+
+function getRecipientName(expense: ExpenseWithDetails): string {
+  // For repayment, the recipient is the first (and only) split member
+  if (expense.splits.length > 0) {
+    const recipient = expense.splits[0].member;
+    const isYou = expense.splits[0].member_id === props.currentMemberId;
+    return recipient.name + (isYou ? ' (You)' : '');
+  }
+  return 'Unknown';
+}
 </script>
 
 <style scoped>
@@ -101,9 +134,18 @@ function formatAmount(amount: number, currency: string): string {
   margin: 8px 16px;
 }
 
+.type-icon {
+  font-size: 20px;
+  margin-right: 8px;
+}
+
 .amount {
   font-weight: 600;
   font-size: 16px;
+}
+
+.amount.income {
+  color: var(--ion-color-success);
 }
 
 .empty-state {

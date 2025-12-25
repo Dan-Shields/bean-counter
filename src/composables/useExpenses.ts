@@ -92,6 +92,7 @@ export function useExpenses() {
         .from('expenses')
         .insert({
           group_id: groupId,
+          type: formData.type,
           title: formData.title,
           date: formData.date,
           category: formData.category,
@@ -170,6 +171,7 @@ export function useExpenses() {
       const { data: expense, error: expenseError } = await supabase
         .from('expenses')
         .update({
+          type: formData.type,
           title: formData.title,
           date: formData.date,
           category: formData.category,

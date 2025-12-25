@@ -1,5 +1,7 @@
 // Database types
 
+export type TransactionType = 'expense' | 'repayment' | 'income';
+
 export interface Group {
   id: string;
   name: string;
@@ -17,6 +19,7 @@ export interface Member {
 export interface Expense {
   id: string;
   group_id: string;
+  type: TransactionType;
   title: string;
   date: string;
   category?: string;
@@ -69,6 +72,7 @@ export interface Settlement {
 
 // Form types
 export interface ExpenseFormData {
+  type: TransactionType;
   title: string;
   date: string;
   category?: string;

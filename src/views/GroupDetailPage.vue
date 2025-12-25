@@ -45,6 +45,7 @@
           :balances="balances"
           :settlements="settlements"
           :group-currency="group?.default_currency || 'EUR'"
+          :group-id="groupId"
           :current-member-id="currentMemberId ?? undefined"
         />
       </template>
