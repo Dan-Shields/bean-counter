@@ -6,7 +6,9 @@
 
     <div class="balances-container">
       <div v-for="balance in balances" :key="balance.member_id" class="balance-row">
-        <span class="member-name">{{ balance.member_name }}</span>
+        <span class="member-name">
+          {{ balance.member_name }}<span v-if="balance.member_id === currentMemberId" class="you-indicator"> (You)</span>
+        </span>
         <div class="bar-container">
           <div class="bar-background">
             <div class="bar-center-line"></div>
@@ -25,17 +27,36 @@
 
     <ion-list-header v-if="settlements.length > 0">
       <ion-label>Suggested Settlements</ion-label>
+      <ion-button
+        v-if="hasOtherSettlements"
+        fill="clear"
+        size="small"
+        @click="showAllSettlements = !showAllSettlements"
+      >
+        {{ showAllSettlements ? 'Show mine' : 'Show all' }}
+      </ion-button>
     </ion-list-header>
 
-    <ion-list v-if="settlements.length > 0">
-      <ion-item v-for="(settlement, index) in settlements" :key="index">
+    <ion-list v-if="displayedSettlements.length > 0">
+      <ion-item v-for="(settlement, index) in displayedSettlements" :key="index">
         <ion-icon :icon="arrowForwardOutline" slot="start" color="medium"></ion-icon>
         <ion-label>
-          <h2>{{ settlement.from_member_name }} pays {{ settlement.to_member_name }}</h2>
+          <h2>
+            {{ settlement.from_member_name }}<span v-if="settlement.from_member_id === currentMemberId" class="you-indicator"> (You)</span>
+            pays
+            {{ settlement.to_member_name }}<span v-if="settlement.to_member_id === currentMemberId" class="you-indicator"> (You)</span>
+          </h2>
           <p>{{ formatCurrency(settlement.amount, groupCurrency) }}</p>
         </ion-label>
       </ion-item>
     </ion-list>
+
+    <div v-else-if="settlements.length > 0" class="no-my-settlements">
+      <p>No settlements involving you</p>
+      <ion-button fill="clear" size="small" @click="showAllSettlements = true">
+        Show all settlements
+      </ion-button>
+    </div>
 
     <div v-else class="settled-state">
       <ion-icon :icon="checkmarkCircleOutline" class="settled-icon"></ion-icon>
@@ -45,13 +66,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
   IonList,
   IonListHeader,
   IonItem,
   IonLabel,
   IonIcon,
+  IonButton,
 } from '@ionic/vue';
 import { arrowForwardOutline, checkmarkCircleOutline } from 'ionicons/icons';
 import { formatCurrency } from '@/utils/currency';
@@ -61,7 +83,25 @@ const props = defineProps<{
   balances: MemberBalance[];
   settlements: Settlement[];
   groupCurrency: string;
+  currentMemberId?: string;
 }>();
+
+const showAllSettlements = ref(false);
+
+const mySettlements = computed(() => {
+  if (!props.currentMemberId) return props.settlements;
+  return props.settlements.filter(
+    (s) => s.from_member_id === props.currentMemberId || s.to_member_id === props.currentMemberId
+  );
+});
+
+const displayedSettlements = computed(() => {
+  return showAllSettlements.value ? props.settlements : mySettlements.value;
+});
+
+const hasOtherSettlements = computed(() => {
+  return props.settlements.length > mySettlements.value.length;
+});
 
 const maxAbsBalance = computed(() => {
   return Math.max(...props.balances.map((b) => Math.abs(b.balance)), 1);
@@ -165,6 +205,25 @@ function formatBalance(balance: number): string {
 
 .balance-amount.negative {
   color: var(--ion-color-danger);
+}
+
+.you-indicator {
+  color: var(--ion-color-primary);
+  font-weight: 600;
+}
+
+.no-my-settlements {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px;
+  text-align: center;
+  color: var(--ion-color-medium);
+}
+
+.no-my-settlements p {
+  margin: 0 0 8px;
+  font-size: 14px;
 }
 
 .settled-state {
