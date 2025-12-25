@@ -388,6 +388,19 @@ onMounted(async () => {
       form.value.payer_id = members.value[0].id;
     }
 
+    // Check for pre-fill query parameters (from "Settle" button)
+    const queryType = route.query.type as string | undefined;
+    const queryFrom = route.query.from as string | undefined;
+    const queryTo = route.query.to as string | undefined;
+    const queryAmount = route.query.amount as string | undefined;
+
+    if (queryType === 'repayment' && queryFrom && queryTo && queryAmount) {
+      form.value.type = 'repayment';
+      form.value.payer_id = queryFrom;
+      repaymentRecipientId.value = queryTo;
+      form.value.amount = parseFloat(queryAmount) || 0;
+    }
+
     // Load existing expense if editing
     if (expenseId) {
       const expense = await getExpense(expenseId);

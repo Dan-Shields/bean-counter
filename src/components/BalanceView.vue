@@ -48,6 +48,14 @@
           </h2>
           <p>{{ formatCurrency(settlement.amount, groupCurrency) }}</p>
         </ion-label>
+        <ion-button
+          slot="end"
+          fill="clear"
+          size="small"
+          :router-link="getSettleLink(settlement)"
+        >
+          Settle
+        </ion-button>
       </ion-item>
     </ion-list>
 
@@ -83,6 +91,7 @@ const props = defineProps<{
   balances: MemberBalance[];
   settlements: Settlement[];
   groupCurrency: string;
+  groupId: string;
   currentMemberId?: string;
 }>();
 
@@ -126,6 +135,16 @@ function getBarStyle(balance: number) {
 function formatBalance(balance: number): string {
   const prefix = balance > 0 ? '+' : '';
   return prefix + formatCurrency(balance, props.groupCurrency);
+}
+
+function getSettleLink(settlement: Settlement): string {
+  const params = new URLSearchParams({
+    type: 'repayment',
+    from: settlement.from_member_id,
+    to: settlement.to_member_id,
+    amount: settlement.amount.toString(),
+  });
+  return `/group/${props.groupId}/expense/new?${params.toString()}`;
 }
 </script>
 
