@@ -41,13 +41,15 @@
 
         <ion-item>
           <ion-input
-            v-model.number="form.amount"
-            label="Amount"
+            :value="getAmountDisplay()"
+            @ionFocus="() => setEditingAmount(true)"
+            @ionBlur="() => setEditingAmount(false)"
+            @ionInput="(e: CustomEvent) => updateAmount(e.detail.value)"
+            label="Amount (optional)"
             label-placement="stacked"
-            type="number"
+            type="text"
             inputmode="decimal"
-            step="0.01"
-            placeholder="0.00"
+            :placeholder="totalExactAmount > 0 ? formatCurrency(totalExactAmount, form.currency) : formatCurrency(0, form.currency)"
           ></ion-input>
         </ion-item>
 
@@ -97,14 +99,14 @@
               :key="member.id"
               :value="member.id"
             >
-              {{ member.name }}
+              {{ member.name }}{{ member.id === currentMemberId ? ' (You)' : '' }}
             </ion-select-option>
           </ion-select>
         </ion-item>
 
         <ion-list-header>
           <ion-label>Split between</ion-label>
-          <ion-button fill="clear" size="small" @click="toggleSplitMode">
+          <ion-button v-if="hasManualAmount" fill="clear" size="small" @click="toggleSplitMode">
             {{ splitMode === 'parts' ? 'Use exact amounts' : 'Use parts' }}
           </ion-button>
         </ion-list-header>
@@ -115,38 +117,50 @@
             :checked="split.enabled"
             @ionChange="(e: CustomEvent) => split.enabled = e.detail.checked"
           ></ion-checkbox>
-          <ion-label>{{ getMemberName(split.member_id) }}</ion-label>
-          <ion-input
-            v-if="split.enabled && splitMode === 'parts'"
-            v-model.number="split.parts"
-            type="number"
-            inputmode="numeric"
-            min="1"
-            class="split-input"
-            placeholder="1"
-          ></ion-input>
-          <ion-input
-            v-if="split.enabled && splitMode === 'exact'"
-            v-model.number="split.exact_amount"
-            type="number"
-            inputmode="decimal"
-            step="0.01"
-            class="split-input"
-            placeholder="0.00"
-          ></ion-input>
+          <ion-label>
+            {{ getMemberName(split.member_id) }}<span v-if="split.member_id === currentMemberId" class="you-indicator"> (You)</span>
+          </ion-label>
+          <div v-if="split.enabled" class="split-inputs">
+            <ion-input
+              v-if="hasManualAmount"
+              v-model.number="split.parts"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              class="split-input parts-input"
+              :class="{ hidden: splitMode === 'exact' }"
+              placeholder="1"
+            ></ion-input>
+            <ion-input
+              v-if="hasManualAmount && splitMode === 'parts'"
+              :value="formatCurrency(getSplitAmount(split), form.currency)"
+              readonly
+              class="split-input amount-input"
+            ></ion-input>
+            <ion-input
+              v-else
+              :value="getExactAmountDisplay(split)"
+              @ionFocus="() => setEditingSplit(split.member_id)"
+              @ionBlur="() => clearEditingSplit()"
+              @ionInput="(e: CustomEvent) => updateExactAmount(split, e.detail.value)"
+              type="text"
+              inputmode="decimal"
+              class="split-input amount-input"
+              :placeholder="hasManualAmount ? formatCurrency(remainderPerPerson, form.currency) : formatCurrency(0, form.currency)"
+            ></ion-input>
+          </div>
         </ion-item>
 
         <div class="split-summary">
-          <p v-if="splitMode === 'parts'">
+          <p v-if="hasManualAmount && splitMode === 'parts'">
             Total parts: {{ totalParts }} &middot;
             Each part: {{ formatCurrency(amountPerPart, form.currency) }}
           </p>
+          <p v-else-if="hasManualAmount">
+            Assigned: {{ formatCurrency(totalExactAmount, form.currency) }} of {{ formatCurrency(form.amount, form.currency) }}
+          </p>
           <p v-else>
-            Assigned: {{ formatCurrency(totalExactAmount, form.currency) }} &middot;
-            Remaining: {{ formatCurrency(remainingAmount, form.currency) }}
-            <span v-if="unassignedCount > 0">
-              (split among {{ unassignedCount }})
-            </span>
+            Total: {{ formatCurrency(totalExactAmount, form.currency) }}
           </p>
         </div>
       </ion-list>
@@ -215,6 +229,9 @@ const isSaving = ref(false);
 const isDeleted = ref(false);
 const showDatePicker = ref(false);
 const splitMode = ref<'parts' | 'exact'>('parts');
+const editingAmount = ref(false);
+const editingSplitId = ref<string | null>(null);
+const currentMemberId = ref<string | null>(null);
 
 let unsubscribe: (() => void) | null = null;
 
@@ -228,16 +245,28 @@ const form = ref<ExpenseFormData>({
   splits: [],
 });
 
+const hasManualAmount = computed(() => form.value.amount > 0);
+
+const enabledSplits = computed(() => form.value.splits.filter((s) => s.enabled));
+
+const totalExactAmount = computed(() => {
+  return enabledSplits.value
+    .filter((s) => s.exact_amount !== undefined && s.exact_amount !== null)
+    .reduce((sum, s) => sum + (s.exact_amount || 0), 0);
+});
+
+const effectiveAmount = computed(() => {
+  return hasManualAmount.value ? form.value.amount : totalExactAmount.value;
+});
+
 const isValid = computed(() => {
   return (
     form.value.title.trim() !== '' &&
-    form.value.amount > 0 &&
+    effectiveAmount.value > 0 &&
     form.value.payer_id !== '' &&
     form.value.splits.some((s) => s.enabled)
   );
 });
-
-const enabledSplits = computed(() => form.value.splits.filter((s) => s.enabled));
 
 const totalParts = computed(() => {
   return enabledSplits.value.reduce((sum, s) => sum + (s.parts || 1), 0);
@@ -248,12 +277,6 @@ const amountPerPart = computed(() => {
   return form.value.amount / totalParts.value;
 });
 
-const totalExactAmount = computed(() => {
-  return enabledSplits.value
-    .filter((s) => s.exact_amount !== undefined && s.exact_amount !== null)
-    .reduce((sum, s) => sum + (s.exact_amount || 0), 0);
-});
-
 const remainingAmount = computed(() => {
   return Math.max(0, form.value.amount - totalExactAmount.value);
 });
@@ -262,6 +285,11 @@ const unassignedCount = computed(() => {
   return enabledSplits.value.filter(
     (s) => s.exact_amount === undefined || s.exact_amount === null
   ).length;
+});
+
+const remainderPerPerson = computed(() => {
+  if (unassignedCount.value === 0) return 0;
+  return remainingAmount.value / unassignedCount.value;
 });
 
 onMounted(async () => {
@@ -283,9 +311,9 @@ onMounted(async () => {
     }));
 
     // Set default payer to current user
-    const currentMemberId = getUserMemberIdForGroup(groupId);
-    if (currentMemberId) {
-      form.value.payer_id = currentMemberId;
+    currentMemberId.value = getUserMemberIdForGroup(groupId);
+    if (currentMemberId.value) {
+      form.value.payer_id = currentMemberId.value;
     } else if (members.value.length > 0) {
       form.value.payer_id = members.value[0].id;
     }
@@ -352,6 +380,65 @@ function getMemberName(memberId: string): string {
   return members.value.find((m) => m.id === memberId)?.name || 'Unknown';
 }
 
+function getAmountDisplay(): string {
+  if (editingAmount.value) {
+    return form.value.amount > 0 ? form.value.amount.toString() : '';
+  }
+  if (form.value.amount > 0) {
+    return formatCurrency(form.value.amount, form.value.currency);
+  }
+  return '';
+}
+
+function setEditingAmount(editing: boolean): void {
+  editingAmount.value = editing;
+}
+
+function updateAmount(value: string | null): void {
+  if (!value) {
+    form.value.amount = 0;
+    return;
+  }
+  const cleaned = value.replace(/[^\d.,-]/g, '').replace(',', '.');
+  const parsed = parseFloat(cleaned);
+  form.value.amount = isNaN(parsed) ? 0 : Math.max(0, parsed);
+}
+
+function getSplitAmount(split: { parts?: number; enabled: boolean }): number {
+  if (!split.enabled || totalParts.value === 0) return 0;
+  const parts = split.parts || 1;
+  return (parts / totalParts.value) * form.value.amount;
+}
+
+function getExactAmountDisplay(split: { member_id: string; exact_amount?: number }): string {
+  // While editing, show raw number; otherwise show formatted currency
+  if (editingSplitId.value === split.member_id) {
+    if (split.exact_amount === undefined || split.exact_amount === null) return '';
+    return split.exact_amount.toString();
+  }
+  if (split.exact_amount === undefined || split.exact_amount === null) return '';
+  return formatCurrency(split.exact_amount, form.value.currency);
+}
+
+function setEditingSplit(memberId: string): void {
+  editingSplitId.value = memberId;
+}
+
+function clearEditingSplit(): void {
+  editingSplitId.value = null;
+}
+
+function updateExactAmount(split: { exact_amount?: number }, value: string | null): void {
+  if (!value) {
+    split.exact_amount = undefined;
+    return;
+  }
+  // Remove currency symbols and whitespace, keep numbers and decimal
+  const cleaned = value.replace(/[^\d.,-]/g, '').replace(',', '.');
+  const parsed = parseFloat(cleaned);
+  split.exact_amount = isNaN(parsed) ? undefined : Math.max(0, parsed);
+}
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString(undefined, {
@@ -390,12 +477,13 @@ async function saveExpense() {
     // Prepare form data based on split mode
     const formData: ExpenseFormData = {
       ...form.value,
+      amount: effectiveAmount.value,
       splits: form.value.splits.map((split) => {
         if (!split.enabled) {
           return { ...split };
         }
 
-        if (splitMode.value === 'parts') {
+        if (hasManualAmount.value && splitMode.value === 'parts') {
           return {
             ...split,
             parts: split.parts || 1,
@@ -510,9 +598,32 @@ async function confirmDelete() {
   font-size: 16px;
 }
 
+.split-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .split-input {
   max-width: 80px;
   text-align: right;
+}
+
+.parts-input {
+  max-width: 50px;
+}
+
+.parts-input.hidden {
+  visibility: hidden;
+}
+
+.amount-input {
+  max-width: 100px;
+}
+
+.you-indicator {
+  color: var(--ion-color-primary);
+  font-weight: 600;
 }
 
 .split-summary {
