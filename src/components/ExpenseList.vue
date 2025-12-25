@@ -16,7 +16,7 @@
             <h2>{{ expense.title }}</h2>
             <p>
               {{ formatDate(expense.date) }} &middot;
-              Paid by {{ expense.payer.name }}
+              Paid by {{ expense.payer.name }}<span v-if="expense.payer_id === currentMemberId" class="you-indicator"> (You)</span>
             </p>
           </ion-label>
           <ion-note slot="end" class="amount">
@@ -129,5 +129,10 @@ function formatAmount(amount: number, currency: string): string {
 .empty-state p {
   margin: 0;
   font-size: 14px;
+}
+
+.you-indicator {
+  color: var(--ion-color-primary);
+  font-weight: 600;
 }
 </style>
