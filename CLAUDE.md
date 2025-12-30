@@ -73,14 +73,36 @@ Set in `.env` locally, and in Cloudflare Pages dashboard for production.
 
 ## Database Schema
 
-See `supabase-setup.sql` for full schema. Key tables:
+Migrations are in `supabase/migrations/`. Key tables:
 - `groups` - id, name, default_currency
 - `members` - id, group_id, name
-- `expenses` - id, group_id, title, date, amount, currency, payer_id, deleted_at
-- `expense_splits` - expense_id, member_id, parts OR exact_amount
-- `expense_changelog` - audit log of all changes
+- `transactions` - id, group_id, type, title, date, amount, currency, payer_id, deleted_at
+- `transaction_splits` - transaction_id, member_id, parts OR exact_amount
+- `transaction_changelog` - audit log of all changes
+
+**Transaction types** (`transactions.type`):
+- `expense` - Regular expense, payer credited, split members debited
+- `repayment` - Direct payment between members to settle debt
+- `income` - Group receives money (refund/deposit), receiver debited, split members credited
 
 RLS policies allow all operations if you know the group ID (link-based access).
+
+## Database Migrations
+
+```bash
+# Apply migrations to remote database
+supabase db push
+
+# Create a new migration (always use CLI to generate correct timestamps)
+supabase migration new <name>
+```
+
+Migrations are in `supabase/migrations/` with timestamp prefixes.
+
+**Important rules:**
+- **Never modify existing migrations** - once pushed to production, migrations are immutable
+- Always create new migrations to alter the schema
+- Use `supabase migration new` to generate correct timestamps
 
 ## Common Tasks
 
