@@ -30,14 +30,14 @@
       </div>
 
       <template v-else>
-        <ExpenseList
+        <TransactionList
           v-if="activeTab === 'expenses'"
-          :expenses="expenses"
+          :transactions="transactions"
           :members="members"
           :current-member-id="currentMemberId"
           :group-currency="group?.default_currency || 'EUR'"
-          @edit="editExpense"
-          @delete="deleteExpenseConfirm"
+          @edit="editTransaction"
+          @delete="deleteTransactionConfirm"
         />
 
         <BalanceView
@@ -51,7 +51,7 @@
       </template>
 
       <ion-fab v-if="activeTab === 'expenses'" vertical="bottom" horizontal="end" slot="fixed">
-        <ion-fab-button :router-link="`/group/${groupId}/expense/new`">
+        <ion-fab-button :router-link="`/group/${groupId}/transaction/new`">
           <ion-icon :icon="addOutline"></ion-icon>
         </ion-fab-button>
       </ion-fab>
@@ -83,29 +83,29 @@ import {
 } from '@ionic/vue';
 import { addOutline, shareOutline } from 'ionicons/icons';
 import { useGroups } from '@/composables/useGroups';
-import { useExpenses } from '@/composables/useExpenses';
+import { useTransactions } from '@/composables/useTransactions';
 import { useBalances } from '@/composables/useBalances';
-import ExpenseList from '@/components/ExpenseList.vue';
+import TransactionList from '@/components/TransactionList.vue';
 import BalanceView from '@/components/BalanceView.vue';
-import type { Group, Member, ExpenseWithDetails, MemberBalance, Settlement } from '@/types';
+import type { Group, Member, TransactionWithDetails, MemberBalance, Settlement } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
 const { getGroup, getGroupMembers, getUserMemberIdForGroup } = useGroups();
-const { getExpenses, deleteExpense } = useExpenses();
+const { getTransactions, deleteTransaction } = useTransactions();
 const { calculateBalances, getSettlements } = useBalances();
 
 const groupId = route.params.groupId as string;
 const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
-const expenses = ref<ExpenseWithDetails[]>([]);
+const transactions = ref<TransactionWithDetails[]>([]);
 const activeTab = ref('expenses');
 const isLoading = ref(true);
 
 const currentMemberId = computed(() => getUserMemberIdForGroup(groupId));
 
 const balances = computed<MemberBalance[]>(() => {
-  return calculateBalances(members.value, expenses.value);
+  return calculateBalances(members.value, transactions.value);
 });
 
 const settlements = computed<Settlement[]>(() => {
@@ -131,7 +131,7 @@ async function loadData() {
   try {
     group.value = await getGroup(groupId);
     members.value = await getGroupMembers(groupId);
-    expenses.value = await getExpenses(groupId);
+    transactions.value = await getTransactions(groupId);
   } catch (error) {
     console.error('Error loading group data:', error);
   } finally {
@@ -139,14 +139,14 @@ async function loadData() {
   }
 }
 
-function editExpense(expenseId: string) {
-  router.push(`/group/${groupId}/expense/${expenseId}`);
+function editTransaction(transactionId: string) {
+  router.push(`/group/${groupId}/transaction/${transactionId}`);
 }
 
-async function deleteExpenseConfirm(expenseId: string) {
+async function deleteTransactionConfirm(transactionId: string) {
   const alert = await alertController.create({
-    header: 'Delete Expense',
-    message: 'Are you sure you want to delete this expense?',
+    header: 'Delete Transaction',
+    message: 'Are you sure you want to delete this transaction?',
     buttons: [
       {
         text: 'Cancel',
@@ -156,11 +156,11 @@ async function deleteExpenseConfirm(expenseId: string) {
         text: 'Delete',
         role: 'destructive',
         handler: async () => {
-          const success = await deleteExpense(expenseId);
+          const success = await deleteTransaction(transactionId);
           if (success) {
-            expenses.value = expenses.value.filter((e) => e.id !== expenseId);
+            transactions.value = transactions.value.filter((t) => t.id !== transactionId);
             const toast = await toastController.create({
-              message: 'Expense deleted',
+              message: 'Transaction deleted',
               duration: 2000,
             });
             await toast.present();

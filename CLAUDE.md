@@ -14,36 +14,36 @@ A shared expense tracking app for small groups (like Tricount, but simpler).
 
 ```
 src/
-├── views/                  # Page components
-│   ├── HomePage.vue        # List of user's groups
-│   ├── CreateGroupPage.vue # Create new group with members
-│   ├── JoinGroupPage.vue   # Join group via link, pick member identity
-│   ├── GroupDetailPage.vue # Tabs: Expenses list + Balances
-│   └── ExpenseFormPage.vue # Create/edit expense with splits
+├── views/                      # Page components
+│   ├── HomePage.vue            # List of user's groups
+│   ├── CreateGroupPage.vue     # Create new group with members
+│   ├── JoinGroupPage.vue       # Join group via link, pick member identity
+│   ├── GroupDetailPage.vue     # Tabs: Transactions list + Balances
+│   └── TransactionFormPage.vue # Create/edit transaction with splits
 ├── components/
-│   ├── ExpenseList.vue     # Filterable expense list with swipe-to-delete
-│   └── BalanceView.vue     # Balance bars + settlement suggestions
+│   ├── TransactionList.vue     # Filterable transaction list with swipe-to-delete
+│   └── BalanceView.vue         # Balance bars + settlement suggestions
 ├── composables/
-│   ├── useSupabase.ts      # Supabase client singleton
-│   ├── useGroups.ts        # Group CRUD + local storage for memberships
-│   ├── useExpenses.ts      # Expense CRUD + realtime delete subscription
-│   └── useBalances.ts      # Balance calculation + settlement algorithm
+│   ├── useSupabase.ts          # Supabase client singleton
+│   ├── useGroups.ts            # Group CRUD + local storage for memberships
+│   ├── useTransactions.ts      # Transaction CRUD + realtime delete subscription
+│   └── useBalances.ts          # Balance calculation + settlement algorithm
 ├── utils/
-│   ├── settlement.ts       # Greedy algorithm to minimize transactions
-│   └── currency.ts         # Exchange rate API (24h cache) + formatting
+│   ├── settlement.ts           # Greedy algorithm to minimize transactions
+│   └── currency.ts             # Exchange rate API (24h cache) + formatting
 └── types/
-    └── index.ts            # All TypeScript interfaces
+    └── index.ts                # All TypeScript interfaces
 ```
 
 ## Key Architectural Decisions
 
 1. **No user accounts** - Groups are accessed via UUID links. User's group memberships stored in localStorage.
 
-2. **Soft deletes** - Expenses have `deleted_at` field. Never hard delete.
+2. **Soft deletes** - Transactions have `deleted_at` field. Never hard delete.
 
-3. **Last write wins** - No locking or conflict resolution. If someone edits a deleted expense, they get notified it was deleted.
+3. **Last write wins** - No locking or conflict resolution. If someone edits a deleted transaction, they get notified it was deleted.
 
-4. **Realtime only for deletes** - We subscribe to expense delete events to notify users editing a deleted expense. No presence tracking.
+4. **Realtime only for deletes** - We subscribe to transaction delete events to notify users editing a deleted transaction. No presence tracking.
 
 5. **Split system** - Two modes:
    - Parts mode: proportional splitting (2 parts = double share)
@@ -84,7 +84,7 @@ RLS policies allow all operations if you know the group ID (link-based access).
 
 ## Common Tasks
 
-**Add a new currency**: Update the `<ion-select>` options in `CreateGroupPage.vue` and `ExpenseFormPage.vue`, plus the symbols map in `currency.ts`.
+**Add a new currency**: Update the `<ion-select>` options in `CreateGroupPage.vue` and `TransactionFormPage.vue`, plus the symbols map in `currency.ts`.
 
 **Add a new expense category**: Categories are freeform text, no predefined list.
 

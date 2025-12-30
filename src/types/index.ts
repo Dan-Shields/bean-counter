@@ -16,7 +16,7 @@ export interface Member {
   created_at: string;
 }
 
-export interface Expense {
+export interface Transaction {
   id: string;
   group_id: string;
   type: TransactionType;
@@ -32,27 +32,27 @@ export interface Expense {
   updated_at: string;
 }
 
-export interface ExpenseSplit {
+export interface TransactionSplit {
   id: string;
-  expense_id: string;
+  transaction_id: string;
   member_id: string;
   parts?: number;
   exact_amount?: number;
   created_at: string;
 }
 
-export interface ExpenseChangelog {
+export interface TransactionChangelog {
   id: string;
-  expense_id: string;
+  transaction_id: string;
   action: 'created' | 'updated' | 'deleted';
   changed_fields?: Record<string, unknown>;
   changed_at: string;
 }
 
-// Full expense with related data
-export interface ExpenseWithDetails extends Expense {
+// Full transaction with related data
+export interface TransactionWithDetails extends Transaction {
   payer: Member;
-  splits: (ExpenseSplit & { member: Member })[];
+  splits: (TransactionSplit & { member: Member })[];
 }
 
 // Balance calculation types
@@ -71,7 +71,7 @@ export interface Settlement {
 }
 
 // Form types
-export interface ExpenseFormData {
+export interface TransactionFormData {
   type: TransactionType;
   title: string;
   date: string;

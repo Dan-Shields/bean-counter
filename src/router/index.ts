@@ -27,14 +27,14 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/GroupDetailPage.vue')
   },
   {
-    path: '/group/:groupId/expense/new',
-    name: 'NewExpense',
-    component: () => import('@/views/ExpenseFormPage.vue')
+    path: '/group/:groupId/transaction/new',
+    name: 'NewTransaction',
+    component: () => import('@/views/TransactionFormPage.vue')
   },
   {
-    path: '/group/:groupId/expense/:expenseId',
-    name: 'EditExpense',
-    component: () => import('@/views/ExpenseFormPage.vue')
+    path: '/group/:groupId/transaction/:transactionId',
+    name: 'EditTransaction',
+    component: () => import('@/views/TransactionFormPage.vue')
   }
 ]
 

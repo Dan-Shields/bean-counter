@@ -1,22 +1,22 @@
 import { ref } from 'vue';
 import { useSupabase } from './useSupabase';
 import { convertCurrency } from '@/utils/currency';
-import type { Expense, ExpenseSplit, ExpenseWithDetails, ExpenseFormData } from '@/types';
+import type { Transaction, TransactionSplit, TransactionWithDetails, TransactionFormData } from '@/types';
 
-export function useExpenses() {
+export function useTransactions() {
   const { supabase } = useSupabase();
 
   /**
-   * Get all expenses for a group
+   * Get all transactions for a group
    */
-  async function getExpenses(groupId: string): Promise<ExpenseWithDetails[]> {
+  async function getTransactions(groupId: string): Promise<TransactionWithDetails[]> {
     try {
       const { data, error } = await supabase
-        .from('expenses')
+        .from('transactions')
         .select(`
           *,
           payer:members!expenses_payer_id_fkey(*),
-          splits:expense_splits(
+          splits:transaction_splits(
             *,
             member:members(*)
           )
@@ -27,55 +27,55 @@ export function useExpenses() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching expenses:', error);
+        console.error('Error fetching transactions:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in getExpenses:', error);
+      console.error('Error in getTransactions:', error);
       return [];
     }
   }
 
   /**
-   * Get a single expense by ID
+   * Get a single transaction by ID
    */
-  async function getExpense(expenseId: string): Promise<ExpenseWithDetails | null> {
+  async function getTransaction(transactionId: string): Promise<TransactionWithDetails | null> {
     try {
       const { data, error } = await supabase
-        .from('expenses')
+        .from('transactions')
         .select(`
           *,
           payer:members!expenses_payer_id_fkey(*),
-          splits:expense_splits(
+          splits:transaction_splits(
             *,
             member:members(*)
           )
         `)
-        .eq('id', expenseId)
+        .eq('id', transactionId)
         .single();
 
       if (error) {
-        console.error('Error fetching expense:', error);
+        console.error('Error fetching transaction:', error);
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('Error in getExpense:', error);
+      console.error('Error in getTransaction:', error);
       return null;
     }
   }
 
   /**
-   * Create a new expense
+   * Create a new transaction
    */
-  async function createExpense(
+  async function createTransaction(
     groupId: string,
-    formData: ExpenseFormData,
+    formData: TransactionFormData,
     baseCurrency: string
-  ): Promise<Expense | null> {
+  ): Promise<Transaction | null> {
     try {
       // Convert to base currency if needed
       let baseCurrencyAmount = formData.amount;
@@ -87,9 +87,9 @@ export function useExpenses() {
         );
       }
 
-      // Create expense
-      const { data: expense, error: expenseError } = await supabase
-        .from('expenses')
+      // Create transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
         .insert({
           group_id: groupId,
           type: formData.type,
@@ -104,8 +104,8 @@ export function useExpenses() {
         .select()
         .single();
 
-      if (expenseError || !expense) {
-        console.error('Error creating expense:', expenseError);
+      if (transactionError || !transaction) {
+        console.error('Error creating transaction:', transactionError);
         return null;
       }
 
@@ -113,14 +113,14 @@ export function useExpenses() {
       const splitsToInsert = formData.splits
         .filter(s => s.enabled)
         .map(s => ({
-          expense_id: expense.id,
+          transaction_id: transaction.id,
           member_id: s.member_id,
           parts: s.exact_amount === undefined ? s.parts : undefined,
           exact_amount: s.exact_amount,
         }));
 
       const { error: splitsError } = await supabase
-        .from('expense_splits')
+        .from('transaction_splits')
         .insert(splitsToInsert);
 
       if (splitsError) {
@@ -129,31 +129,31 @@ export function useExpenses() {
       }
 
       // Add to changelog
-      await supabase.from('expense_changelog').insert({
-        expense_id: expense.id,
+      await supabase.from('transaction_changelog').insert({
+        transaction_id: transaction.id,
         action: 'created',
       });
 
-      return expense;
+      return transaction;
     } catch (error) {
-      console.error('Error in createExpense:', error);
+      console.error('Error in createTransaction:', error);
       return null;
     }
   }
 
   /**
-   * Update an existing expense
+   * Update an existing transaction
    */
-  async function updateExpense(
-    expenseId: string,
-    formData: ExpenseFormData,
+  async function updateTransaction(
+    transactionId: string,
+    formData: TransactionFormData,
     baseCurrency: string
-  ): Promise<Expense | null> {
+  ): Promise<Transaction | null> {
     try {
-      // Check if expense is deleted
-      const existing = await getExpense(expenseId);
+      // Check if transaction is deleted
+      const existing = await getTransaction(transactionId);
       if (!existing || existing.deleted_at) {
-        console.error('Cannot update deleted expense');
+        console.error('Cannot update deleted transaction');
         return null;
       }
 
@@ -167,9 +167,9 @@ export function useExpenses() {
         );
       }
 
-      // Update expense
-      const { data: expense, error: expenseError } = await supabase
-        .from('expenses')
+      // Update transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
         .update({
           type: formData.type,
           title: formData.title,
@@ -181,33 +181,33 @@ export function useExpenses() {
           payer_id: formData.payer_id,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', expenseId)
+        .eq('id', transactionId)
         .select()
         .single();
 
-      if (expenseError || !expense) {
-        console.error('Error updating expense:', expenseError);
+      if (transactionError || !transaction) {
+        console.error('Error updating transaction:', transactionError);
         return null;
       }
 
       // Delete old splits
       await supabase
-        .from('expense_splits')
+        .from('transaction_splits')
         .delete()
-        .eq('expense_id', expenseId);
+        .eq('transaction_id', transactionId);
 
       // Create new splits
       const splitsToInsert = formData.splits
         .filter(s => s.enabled)
         .map(s => ({
-          expense_id: expense.id,
+          transaction_id: transaction.id,
           member_id: s.member_id,
           parts: s.exact_amount === undefined ? s.parts : undefined,
           exact_amount: s.exact_amount,
         }));
 
       const { error: splitsError } = await supabase
-        .from('expense_splits')
+        .from('transaction_splits')
         .insert(splitsToInsert);
 
       if (splitsError) {
@@ -216,62 +216,62 @@ export function useExpenses() {
       }
 
       // Add to changelog
-      await supabase.from('expense_changelog').insert({
-        expense_id: expense.id,
+      await supabase.from('transaction_changelog').insert({
+        transaction_id: transaction.id,
         action: 'updated',
       });
 
-      return expense;
+      return transaction;
     } catch (error) {
-      console.error('Error in updateExpense:', error);
+      console.error('Error in updateTransaction:', error);
       return null;
     }
   }
 
   /**
-   * Delete an expense (soft delete)
+   * Delete a transaction (soft delete)
    */
-  async function deleteExpense(expenseId: string): Promise<boolean> {
+  async function deleteTransaction(transactionId: string): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('expenses')
+        .from('transactions')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', expenseId);
+        .eq('id', transactionId);
 
       if (error) {
-        console.error('Error deleting expense:', error);
+        console.error('Error deleting transaction:', error);
         return false;
       }
 
       // Add to changelog
-      await supabase.from('expense_changelog').insert({
-        expense_id: expenseId,
+      await supabase.from('transaction_changelog').insert({
+        transaction_id: transactionId,
         action: 'deleted',
       });
 
       return true;
     } catch (error) {
-      console.error('Error in deleteExpense:', error);
+      console.error('Error in deleteTransaction:', error);
       return false;
     }
   }
 
   /**
-   * Subscribe to deleted_at changes for an expense
+   * Subscribe to deleted_at changes for a transaction
    */
-  function subscribeToExpenseDeletes(expenseId: string, onDelete: () => void) {
+  function subscribeToTransactionDeletes(transactionId: string, onDelete: () => void) {
     const channel = supabase
-      .channel(`expense_${expenseId}`)
+      .channel(`transaction_${transactionId}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'expenses',
-          filter: `id=eq.${expenseId}`,
+          table: 'transactions',
+          filter: `id=eq.${transactionId}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as Expense).deleted_at) {
+          if (payload.new && (payload.new as Transaction).deleted_at) {
             onDelete();
           }
         }
@@ -284,11 +284,11 @@ export function useExpenses() {
   }
 
   return {
-    getExpenses,
-    getExpense,
-    createExpense,
-    updateExpense,
-    deleteExpense,
-    subscribeToExpenseDeletes,
+    getTransactions,
+    getTransaction,
+    createTransaction,
+    updateTransaction,
+    deleteTransaction,
+    subscribeToTransactionDeletes,
   };
 }

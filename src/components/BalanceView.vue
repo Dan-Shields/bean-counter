@@ -144,7 +144,7 @@ function getSettleLink(settlement: Settlement): string {
     to: settlement.to_member_id,
     amount: settlement.amount.toString(),
   });
-  return `/group/${props.groupId}/expense/new?${params.toString()}`;
+  return `/group/${props.groupId}/transaction/new?${params.toString()}`;
 }
 </script>
 

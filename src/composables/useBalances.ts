@@ -1,13 +1,13 @@
-import type { ExpenseWithDetails, Member, MemberBalance, Settlement } from '@/types';
+import type { TransactionWithDetails, Member, MemberBalance, Settlement } from '@/types';
 import { calculateSettlements } from '@/utils/settlement';
 
 export function useBalances() {
   /**
-   * Calculate balances for all members based on expenses
+   * Calculate balances for all members based on transactions
    */
   function calculateBalances(
     members: Member[],
-    expenses: ExpenseWithDetails[]
+    transactions: TransactionWithDetails[]
   ): MemberBalance[] {
     const balances: Record<string, number> = {};
 
@@ -16,18 +16,18 @@ export function useBalances() {
       balances[member.id] = 0;
     });
 
-    // Calculate balances from expenses
-    expenses.forEach(expense => {
-      const amount = expense.base_currency_amount || expense.amount;
-      const type = expense.type || 'expense'; // Default for legacy data
+    // Calculate balances from transactions
+    transactions.forEach(transaction => {
+      const amount = transaction.base_currency_amount || transaction.amount;
+      const type = transaction.type || 'expense'; // Default for legacy data
 
       // For expense/repayment: payer gets credited (+)
       // For income: receiver gets debited (-) - they received money and owe it to the group
       const payerMultiplier = type === 'income' ? -1 : 1;
-      balances[expense.payer_id] += amount * payerMultiplier;
+      balances[transaction.payer_id] += amount * payerMultiplier;
 
       // Calculate each member's share
-      const splits = expense.splits;
+      const splits = transaction.splits;
       const exactSplits = splits.filter(s => s.exact_amount !== undefined && s.exact_amount !== null);
       const partsSplits = splits.filter(s => s.exact_amount === undefined || s.exact_amount === null);
 

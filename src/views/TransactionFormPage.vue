@@ -10,7 +10,7 @@
           <ion-button v-if="isEditing" color="danger" @click="confirmDelete">
             <ion-icon :icon="trashOutline" slot="icon-only"></ion-icon>
           </ion-button>
-          <ion-button :disabled="!isValid || isSaving" @click="saveExpense">
+          <ion-button :disabled="!isValid || isSaving" @click="saveTransaction">
             <span v-if="isSaving">Saving...</span>
             <span v-else>Save</span>
           </ion-button>
@@ -21,7 +21,7 @@
     <ion-content :fullscreen="true">
       <div v-if="isDeleted" class="deleted-notice">
         <ion-icon :icon="alertCircleOutline"></ion-icon>
-        <p>This expense was deleted by someone else.</p>
+        <p>This transaction was deleted by someone else.</p>
         <ion-button :router-link="`/group/${groupId}`">Go Back</ion-button>
       </div>
 
@@ -242,18 +242,18 @@ import {
 } from '@ionic/vue';
 import { alertCircleOutline, trashOutline } from 'ionicons/icons';
 import { useGroups } from '@/composables/useGroups';
-import { useExpenses } from '@/composables/useExpenses';
+import { useTransactions } from '@/composables/useTransactions';
 import { formatCurrency } from '@/utils/currency';
-import type { Group, Member, ExpenseFormData, TransactionType } from '@/types';
+import type { Group, Member, TransactionFormData, TransactionType } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
 const { getGroup, getGroupMembers, getUserMemberIdForGroup } = useGroups();
-const { getExpense, createExpense, updateExpense, deleteExpense, subscribeToExpenseDeletes } = useExpenses();
+const { getTransaction, createTransaction, updateTransaction, deleteTransaction, subscribeToTransactionDeletes } = useTransactions();
 
 const groupId = route.params.groupId as string;
-const expenseId = route.params.expenseId as string | undefined;
-const isEditing = computed(() => !!expenseId);
+const transactionId = route.params.transactionId as string | undefined;
+const isEditing = computed(() => !!transactionId);
 
 const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
@@ -269,7 +269,7 @@ const repaymentRecipientId = ref<string>('');
 
 let unsubscribe: (() => void) | null = null;
 
-const form = ref<ExpenseFormData>({
+const form = ref<TransactionFormData>({
   type: 'expense',
   title: '',
   date: new Date().toISOString().split('T')[0],
@@ -401,29 +401,29 @@ onMounted(async () => {
       form.value.amount = parseFloat(queryAmount) || 0;
     }
 
-    // Load existing expense if editing
-    if (expenseId) {
-      const expense = await getExpense(expenseId);
-      if (expense) {
-        if (expense.deleted_at) {
+    // Load existing transaction if editing
+    if (transactionId) {
+      const transaction = await getTransaction(transactionId);
+      if (transaction) {
+        if (transaction.deleted_at) {
           isDeleted.value = true;
         } else {
-          form.value.type = expense.type || 'expense';
-          form.value.title = expense.title;
-          form.value.date = expense.date;
-          form.value.category = expense.category || '';
-          form.value.amount = expense.amount;
-          form.value.currency = expense.currency;
-          form.value.payer_id = expense.payer_id;
+          form.value.type = transaction.type || 'expense';
+          form.value.title = transaction.title;
+          form.value.date = transaction.date;
+          form.value.category = transaction.category || '';
+          form.value.amount = transaction.amount;
+          form.value.currency = transaction.currency;
+          form.value.payer_id = transaction.payer_id;
 
           // For repayment, extract the recipient from the single split
-          if (form.value.type === 'repayment' && expense.splits.length > 0) {
-            repaymentRecipientId.value = expense.splits[0].member_id;
+          if (form.value.type === 'repayment' && transaction.splits.length > 0) {
+            repaymentRecipientId.value = transaction.splits[0].member_id;
           }
 
-          // Set splits from expense
+          // Set splits from transaction
           form.value.splits = members.value.map((m) => {
-            const split = expense.splits.find((s) => s.member_id === m.id);
+            const split = transaction.splits.find((s) => s.member_id === m.id);
             if (split) {
               return {
                 member_id: m.id,
@@ -441,12 +441,12 @@ onMounted(async () => {
           });
 
           // Detect split mode
-          if (expense.splits.some((s) => s.exact_amount !== null)) {
+          if (transaction.splits.some((s) => s.exact_amount !== null)) {
             splitMode.value = 'exact';
           }
 
           // Subscribe to delete events
-          unsubscribe = subscribeToExpenseDeletes(expenseId, () => {
+          unsubscribe = subscribeToTransactionDeletes(transactionId, () => {
             isDeleted.value = true;
           });
         }
@@ -557,13 +557,13 @@ function toggleSplitMode() {
   });
 }
 
-async function saveExpense() {
+async function saveTransaction() {
   if (!isValid.value || !group.value) return;
 
   isSaving.value = true;
 
   try {
-    let formData: ExpenseFormData;
+    let formData: TransactionFormData;
 
     if (form.value.type === 'repayment') {
       // For repayment: create a single split for the recipient
@@ -605,11 +605,11 @@ async function saveExpense() {
     }
 
     let success: boolean;
-    if (isEditing.value && expenseId) {
-      const result = await updateExpense(expenseId, formData, group.value.default_currency);
+    if (isEditing.value && transactionId) {
+      const result = await updateTransaction(transactionId, formData, group.value.default_currency);
       success = result !== null;
     } else {
-      const result = await createExpense(groupId, formData, group.value.default_currency);
+      const result = await createTransaction(groupId, formData, group.value.default_currency);
       success = result !== null;
     }
 
@@ -623,12 +623,12 @@ async function saveExpense() {
       await toast.present();
       router.back();
     } else {
-      throw new Error('Failed to save expense');
+      throw new Error('Failed to save transaction');
     }
   } catch (error) {
-    console.error('Error saving expense:', error);
+    console.error('Error saving transaction:', error);
     const toast = await toastController.create({
-      message: 'Failed to save expense. Please try again.',
+      message: 'Failed to save transaction. Please try again.',
       duration: 3000,
       color: 'danger',
     });
@@ -639,11 +639,11 @@ async function saveExpense() {
 }
 
 async function confirmDelete() {
-  if (!expenseId) return;
+  if (!transactionId) return;
 
   const alert = await alertController.create({
-    header: 'Delete Expense',
-    message: 'Are you sure you want to delete this expense? This cannot be undone.',
+    header: 'Delete Transaction',
+    message: 'Are you sure you want to delete this transaction? This cannot be undone.',
     buttons: [
       {
         text: 'Cancel',
@@ -653,17 +653,17 @@ async function confirmDelete() {
         text: 'Delete',
         role: 'destructive',
         handler: async () => {
-          const success = await deleteExpense(expenseId);
+          const success = await deleteTransaction(transactionId);
           if (success) {
             const toast = await toastController.create({
-              message: 'Expense deleted',
+              message: 'Transaction deleted',
               duration: 2000,
             });
             await toast.present();
             router.replace(`/group/${groupId}`);
           } else {
             const toast = await toastController.create({
-              message: 'Failed to delete expense',
+              message: 'Failed to delete transaction',
               duration: 3000,
               color: 'danger',
             });
