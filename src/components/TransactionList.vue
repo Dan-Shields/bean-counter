@@ -24,9 +24,16 @@
                     ></ion-icon>
                     <ion-icon
                         v-else-if="transaction.type === 'income'"
-                        :icon="walletOutline"
+                        :icon="trendingUpOutline"
                         slot="start"
-                        color="tertiary"
+                        color="success"
+                        class="type-icon"
+                    ></ion-icon>
+                    <ion-icon
+                        v-else
+                        :icon="cartOutline"
+                        slot="start"
+                        color="medium"
                         class="type-icon"
                     ></ion-icon>
                     <ion-label>
@@ -108,10 +115,11 @@
 
 <script setup lang="ts">
 import {
+    cartOutline,
     receiptOutline,
     swapHorizontalOutline,
     trashOutline,
-    walletOutline,
+    trendingUpOutline,
 } from 'ionicons/icons';
 import { computed, ref } from 'vue';
 import type { Member, TransactionWithDetails } from '@/types';
