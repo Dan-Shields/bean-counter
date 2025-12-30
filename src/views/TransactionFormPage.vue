@@ -280,21 +280,18 @@
             <ion-modal
                 :is-open="showDatePicker"
                 @didDismiss="showDatePicker = false"
+                class="date-picker-modal"
             >
                 <ion-datetime
+                    ref="datetimeRef"
                     presentation="date"
                     :value="form.date"
-                    @ionChange="
-                        (e: CustomEvent) => {
-                            form.date = e.detail.value;
-                            showDatePicker = false;
-                        }
-                    "
                 >
                     <ion-buttons slot="buttons">
-                        <ion-button
-                            color="primary"
-                            @click="showDatePicker = false"
+                        <ion-button color="medium" @click="cancelDatePicker"
+                            >Cancel</ion-button
+                        >
+                        <ion-button color="primary" @click="confirmDatePicker"
                             >Done</ion-button
                         >
                     </ion-buttons>
@@ -365,6 +362,7 @@ const isLoading = ref(true);
 const isSaving = ref(false);
 const isDeleted = ref(false);
 const showDatePicker = ref(false);
+const datetimeRef = ref<{ $el: HTMLIonDatetimeElement } | null>(null);
 const splitMode = ref<'parts' | 'exact'>('parts');
 const editingAmount = ref(false);
 const editingSplitId = ref<string | null>(null);
@@ -694,6 +692,23 @@ function openDatePicker() {
     showDatePicker.value = true;
 }
 
+async function confirmDatePicker() {
+    const datetime = datetimeRef.value?.$el;
+    if (datetime) {
+        await datetime.confirm();
+        const value = datetime.value;
+        if (value && typeof value === 'string') {
+            form.value.date = value.split('T')[0];
+        }
+    }
+    showDatePicker.value = false;
+}
+
+async function cancelDatePicker() {
+    await datetimeRef.value?.$el?.reset();
+    showDatePicker.value = false;
+}
+
 function toggleSplitMode() {
     splitMode.value = splitMode.value === 'parts' ? 'exact' : 'parts';
 
@@ -915,5 +930,18 @@ async function confirmDelete() {
 
 .split-summary p {
     margin: 0;
+}
+</style>
+
+<style>
+.date-picker-modal {
+    --height: auto;
+    --width: fit-content;
+    --border-radius: 8px;
+}
+
+.date-picker-modal .ion-page {
+    position: relative;
+    contain: content;
 }
 </style>
