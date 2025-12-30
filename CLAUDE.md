@@ -33,6 +33,9 @@ src/
 │   └── currency.ts             # Exchange rate API (24h cache) + formatting
 └── types/
     └── index.ts                # All TypeScript interfaces
+
+supabase/
+└── migrations/                 # Database migrations (timestamped SQL files)
 ```
 
 ## Key Architectural Decisions
@@ -92,25 +95,14 @@ RLS policies allow all operations if you know the group ID (link-based access).
 ## Database Migrations
 
 ```bash
-# Apply migrations to remote database
-supabase db push
-
-# Create a new migration (always use CLI to generate correct timestamps)
-supabase migration new <name>
+supabase db push              # Apply migrations to remote database
+supabase migration new <name> # Create new migration (generates timestamp)
 ```
 
-Migrations are in `supabase/migrations/` with timestamp prefixes.
-
-**Important rules:**
-
-- **Never modify existing migrations** - once pushed to production, migrations are immutable
-- Always create new migrations to alter the schema
-- Use `supabase migration new` to generate correct timestamps
+**Never modify existing migrations** once pushed to production. Always create new migrations to alter the schema.
 
 ## Common Tasks
 
 **Add a new currency**: Update the `<ion-select>` options in `CreateGroupPage.vue` and `TransactionFormPage.vue`, plus the symbols map in `currency.ts`.
-
-**Add a new expense category**: Categories are freeform text, no predefined list.
 
 **Build for mobile**: Run `ionic capacitor add ios` or `android`, then build with Xcode/Android Studio.
