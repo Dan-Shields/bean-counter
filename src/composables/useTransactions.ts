@@ -81,7 +81,9 @@ export function useTransactions() {
             const hasMore = transactions.length > limit;
 
             return {
-                transactions: hasMore ? transactions.slice(0, limit) : transactions,
+                transactions: hasMore
+                    ? transactions.slice(0, limit)
+                    : transactions,
                 hasMore,
             };
         } catch (error) {

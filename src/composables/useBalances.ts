@@ -1,5 +1,6 @@
 import type { MemberBalance, Settlement } from '@/types';
 import { calculateSettlements } from '@/utils/settlement';
+
 import { useSupabase } from './useSupabase';
 
 export function useBalances() {
@@ -26,7 +27,10 @@ export function useBalances() {
             }
 
             return (data || []).map((row) => {
-                const member = row.member as unknown as { id: string; name: string };
+                const member = row.member as unknown as {
+                    id: string;
+                    name: string;
+                };
                 return {
                     member_id: member.id,
                     member_name: member.name,

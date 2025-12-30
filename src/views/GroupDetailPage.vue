@@ -123,16 +123,16 @@ import {
     IonToolbar,
     toastController,
 } from '@ionic/vue';
-import type { InfiniteScrollCustomEvent, RefresherCustomEvent } from '@ionic/vue';
+import type {
+    InfiniteScrollCustomEvent,
+    RefresherCustomEvent,
+} from '@ionic/vue';
 
 const route = useRoute();
 const router = useRouter();
 const { getGroup, getGroupMembers, getUserMemberIdForGroup } = useGroups();
-const {
-    getTransactions,
-    deleteTransaction,
-    subscribeToGroupTransactions,
-} = useTransactions();
+const { getTransactions, deleteTransaction, subscribeToGroupTransactions } =
+    useTransactions();
 const { getBalances, getSettlements } = useBalances();
 
 const groupId = route.params.groupId as string;
@@ -189,7 +189,10 @@ async function loadData() {
         members.value = await getGroupMembers(groupId);
         const result = await getTransactions(groupId, {
             sortAsc: sortAsc.value,
-            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
+            memberId:
+                filter.value === 'mine'
+                    ? (currentMemberId.value ?? undefined)
+                    : undefined,
         });
         transactions.value = result.transactions;
         hasMoreTransactions.value = result.hasMore;
@@ -206,7 +209,10 @@ async function loadMoreTransactions(event: InfiniteScrollCustomEvent) {
         const result = await getTransactions(groupId, {
             offset: transactions.value.length,
             sortAsc: sortAsc.value,
-            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
+            memberId:
+                filter.value === 'mine'
+                    ? (currentMemberId.value ?? undefined)
+                    : undefined,
         });
         transactions.value = [...transactions.value, ...result.transactions];
         hasMoreTransactions.value = result.hasMore;
@@ -223,7 +229,10 @@ async function handleSortChange(newSortAsc: boolean) {
     try {
         const result = await getTransactions(groupId, {
             sortAsc: newSortAsc,
-            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
+            memberId:
+                filter.value === 'mine'
+                    ? (currentMemberId.value ?? undefined)
+                    : undefined,
         });
         transactions.value = result.transactions;
         hasMoreTransactions.value = result.hasMore;
@@ -238,7 +247,10 @@ async function handleFilterChange(newFilter: 'all' | 'mine') {
     try {
         const result = await getTransactions(groupId, {
             sortAsc: sortAsc.value,
-            memberId: newFilter === 'mine' ? currentMemberId.value ?? undefined : undefined,
+            memberId:
+                newFilter === 'mine'
+                    ? (currentMemberId.value ?? undefined)
+                    : undefined,
         });
         transactions.value = result.transactions;
         hasMoreTransactions.value = result.hasMore;

@@ -1,7 +1,11 @@
 <template>
     <div>
         <div class="toolbar">
-            <ion-segment v-model="filter" class="filter-segment" :disabled="refreshing">
+            <ion-segment
+                v-model="filter"
+                class="filter-segment"
+                :disabled="refreshing"
+            >
                 <ion-segment-button value="all">
                     <ion-label>All</ion-label>
                 </ion-segment-button>
@@ -9,7 +13,11 @@
                     <ion-label>Mine</ion-label>
                 </ion-segment-button>
             </ion-segment>
-            <ion-spinner v-if="refreshing" name="crescent" class="toolbar-spinner"></ion-spinner>
+            <ion-spinner
+                v-if="refreshing"
+                name="crescent"
+                class="toolbar-spinner"
+            ></ion-spinner>
             <ion-button v-else fill="clear" size="small" @click="toggleSort">
                 <ion-icon
                     :icon="props.sortAsc ? arrowUpOutline : arrowDownOutline"
