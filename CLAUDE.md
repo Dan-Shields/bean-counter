@@ -21,13 +21,13 @@ src/
 │   ├── GroupDetailPage.vue     # Tabs: Transactions list + Balances
 │   └── TransactionFormPage.vue # Create/edit transaction with splits
 ├── components/
-│   ├── TransactionList.vue     # Filterable transaction list with swipe-to-delete
+│   ├── TransactionList.vue     # Transaction list with filter, sort, infinite scroll
 │   └── BalanceView.vue         # Balance bars + settlement suggestions
 ├── composables/
 │   ├── useSupabase.ts          # Supabase client singleton
 │   ├── useGroups.ts            # Group CRUD + local storage for memberships
-│   ├── useTransactions.ts      # Transaction CRUD + realtime delete subscription
-│   └── useBalances.ts          # Balance calculation + settlement algorithm
+│   ├── useTransactions.ts      # Transaction CRUD + realtime subscriptions + pagination
+│   └── useBalances.ts          # Fetch server balances + settlement algorithm
 ├── utils/
 │   ├── settlement.ts           # Greedy algorithm to minimize transactions
 │   └── currency.ts             # Exchange rate API (24h cache) + formatting
@@ -46,13 +46,17 @@ supabase/
 
 3. **Last write wins** - No locking or conflict resolution. If someone edits a deleted transaction, they get notified it was deleted.
 
-4. **Realtime only for deletes** - We subscribe to transaction delete events to notify users editing a deleted transaction. No presence tracking.
+4. **Realtime for changes** - Subscribe to transaction changes to show "Changes available" banner. Also notify users editing a deleted transaction. No presence tracking or auto-refresh.
 
 5. **Split system** - Two modes:
     - Parts mode: proportional splitting (2 parts = double share)
     - Exact mode: fixed amounts, remainder split among unassigned
 
 6. **Currency conversion** - Uses free exchangerate-api.com, cached 24h in localStorage.
+
+7. **Server-side balances** - Balances are calculated by database triggers on transaction changes, stored in `member_balances` table. Client fetches pre-computed balances.
+
+8. **Transaction pagination** - Transaction list uses infinite scroll, loading 20 items at a time.
 
 ## Commands
 
@@ -83,6 +87,7 @@ Migrations are in `supabase/migrations/`. Key tables:
 - `transactions` - id, group_id, type, title, date, amount, currency, payer_id, deleted_at
 - `transaction_splits` - transaction_id, member_id, parts OR exact_amount
 - `transaction_changelog` - audit log of all changes
+- `member_balances` - group_id, member_id, balance (auto-updated by triggers)
 
 **Transaction types** (`transactions.type`):
 
