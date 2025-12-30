@@ -19,13 +19,20 @@ export function useTransactions() {
      */
     async function getTransactions(
         groupId: string,
-        options?: { limit?: number; offset?: number },
+        options?: {
+            limit?: number;
+            offset?: number;
+            sortAsc?: boolean;
+            memberId?: string;
+        },
     ): Promise<{ transactions: TransactionWithDetails[]; hasMore: boolean }> {
         try {
             const limit = options?.limit ?? PAGE_SIZE;
             const offset = options?.offset ?? 0;
+            const ascending = options?.sortAsc ?? false;
+            const memberId = options?.memberId;
 
-            const { data, error } = await supabase
+            let query = supabase
                 .from('transactions')
                 .select(
                     `
@@ -38,9 +45,30 @@ export function useTransactions() {
         `,
                 )
                 .eq('group_id', groupId)
-                .is('deleted_at', null)
-                .order('date', { ascending: false })
-                .order('created_at', { ascending: false })
+                .is('deleted_at', null);
+
+            // Filter by member: payer OR in splits
+            if (memberId) {
+                const { data: splitData } = await supabase
+                    .from('transaction_splits')
+                    .select('transaction_id')
+                    .eq('member_id', memberId);
+
+                const splitTransactionIds =
+                    splitData?.map((s) => s.transaction_id) || [];
+
+                if (splitTransactionIds.length > 0) {
+                    query = query.or(
+                        `payer_id.eq.${memberId},id.in.(${splitTransactionIds.join(',')})`,
+                    );
+                } else {
+                    query = query.eq('payer_id', memberId);
+                }
+            }
+
+            const { data, error } = await query
+                .order('date', { ascending })
+                .order('created_at', { ascending })
                 .range(offset, offset + limit);
 
             if (error) {

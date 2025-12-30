@@ -1,7 +1,7 @@
 <template>
     <div>
         <div class="toolbar">
-            <ion-segment v-model="filter" class="filter-segment">
+            <ion-segment v-model="filter" class="filter-segment" :disabled="refreshing">
                 <ion-segment-button value="all">
                     <ion-label>All</ion-label>
                 </ion-segment-button>
@@ -9,17 +9,18 @@
                     <ion-label>Mine</ion-label>
                 </ion-segment-button>
             </ion-segment>
-            <ion-button fill="clear" size="small" @click="toggleSort">
+            <ion-spinner v-if="refreshing" name="crescent" class="toolbar-spinner"></ion-spinner>
+            <ion-button v-else fill="clear" size="small" @click="toggleSort">
                 <ion-icon
-                    :icon="sortAsc ? arrowUpOutline : arrowDownOutline"
+                    :icon="props.sortAsc ? arrowUpOutline : arrowDownOutline"
                     slot="icon-only"
                 ></ion-icon>
             </ion-button>
         </div>
 
-        <ion-list v-if="filteredTransactions.length > 0">
+        <ion-list v-if="transactions.length > 0">
             <ion-item-sliding
-                v-for="transaction in filteredTransactions"
+                v-for="transaction in transactions"
                 :key="transaction.id"
             >
                 <ion-item button @click="$emit('edit', transaction.id)">
@@ -140,7 +141,7 @@ import {
     trashOutline,
     trendingUpOutline,
 } from 'ionicons/icons';
-import { computed, ref } from 'vue';
+import { watch } from 'vue';
 import type { Member, TransactionWithDetails } from '@/types';
 import { formatCurrency } from '@/utils/currency';
 import {
@@ -157,6 +158,7 @@ import {
     IonNote,
     IonSegment,
     IonSegmentButton,
+    IonSpinner,
 } from '@ionic/vue';
 import type { InfiniteScrollCustomEvent } from '@ionic/vue';
 
@@ -167,41 +169,26 @@ const props = defineProps<{
     groupCurrency: string;
     hasMore?: boolean;
     isLoading?: boolean;
+    sortAsc?: boolean;
+    refreshing?: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
     edit: [transactionId: string];
     delete: [transactionId: string];
     loadMore: [event: InfiniteScrollCustomEvent];
+    sortChange: [sortAsc: boolean];
+    filterChange: [filter: 'all' | 'mine'];
 }>();
 
-const filter = ref('all');
-const sortAsc = ref(false);
+const filter = defineModel<'all' | 'mine'>('filter', { default: 'all' });
 
-const filteredTransactions = computed(() => {
-    let result = props.transactions;
-
-    if (filter.value === 'mine' && props.currentMemberId) {
-        result = result.filter((transaction) => {
-            // Include if user paid or is in splits
-            if (transaction.payer_id === props.currentMemberId) return true;
-            return transaction.splits.some(
-                (s) => s.member_id === props.currentMemberId,
-            );
-        });
-    }
-
-    if (sortAsc.value) {
-        return [...result].sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-        );
-    }
-
-    return result;
+watch(filter, (newFilter) => {
+    emit('filterChange', newFilter);
 });
 
 function toggleSort() {
-    sortAsc.value = !sortAsc.value;
+    emit('sortChange', !props.sortAsc);
 }
 
 function formatDate(dateStr: string): string {
@@ -237,6 +224,12 @@ function getRecipientName(transaction: TransactionWithDetails): string {
 
 .filter-segment {
     flex: 1;
+}
+
+.toolbar-spinner {
+    width: 24px;
+    height: 24px;
+    margin: 0 12px;
 }
 
 .type-icon {

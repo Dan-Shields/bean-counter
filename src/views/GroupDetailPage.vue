@@ -44,15 +44,20 @@
             <template v-else>
                 <TransactionList
                     v-if="activeTab === 'expenses'"
+                    v-model:filter="filter"
                     :transactions="transactions"
                     :members="members"
                     :current-member-id="currentMemberId"
                     :group-currency="group?.default_currency || 'EUR'"
                     :has-more="hasMoreTransactions"
                     :is-loading="isLoading"
+                    :sort-asc="sortAsc"
+                    :refreshing="refreshing"
                     @edit="editTransaction"
                     @delete="deleteTransactionConfirm"
                     @load-more="loadMoreTransactions"
+                    @sort-change="handleSortChange"
+                    @filter-change="handleFilterChange"
                 />
 
                 <BalanceView
@@ -139,6 +144,9 @@ const activeTab = ref('expenses');
 const isLoading = ref(true);
 const hasUpdates = ref(false);
 const hasMoreTransactions = ref(false);
+const sortAsc = ref(false);
+const filter = ref<'all' | 'mine'>('all');
+const refreshing = ref(false);
 
 let unsubscribe: (() => void) | null = null;
 
@@ -179,7 +187,10 @@ async function loadData() {
     try {
         group.value = await getGroup(groupId);
         members.value = await getGroupMembers(groupId);
-        const result = await getTransactions(groupId);
+        const result = await getTransactions(groupId, {
+            sortAsc: sortAsc.value,
+            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
+        });
         transactions.value = result.transactions;
         hasMoreTransactions.value = result.hasMore;
         balances.value = await getBalances(groupId);
@@ -194,6 +205,8 @@ async function loadMoreTransactions(event: InfiniteScrollCustomEvent) {
     try {
         const result = await getTransactions(groupId, {
             offset: transactions.value.length,
+            sortAsc: sortAsc.value,
+            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
         });
         transactions.value = [...transactions.value, ...result.transactions];
         hasMoreTransactions.value = result.hasMore;
@@ -201,6 +214,36 @@ async function loadMoreTransactions(event: InfiniteScrollCustomEvent) {
         console.error('Error loading more transactions:', error);
     } finally {
         event.target.complete();
+    }
+}
+
+async function handleSortChange(newSortAsc: boolean) {
+    sortAsc.value = newSortAsc;
+    refreshing.value = true;
+    try {
+        const result = await getTransactions(groupId, {
+            sortAsc: newSortAsc,
+            memberId: filter.value === 'mine' ? currentMemberId.value ?? undefined : undefined,
+        });
+        transactions.value = result.transactions;
+        hasMoreTransactions.value = result.hasMore;
+    } finally {
+        refreshing.value = false;
+    }
+}
+
+async function handleFilterChange(newFilter: 'all' | 'mine') {
+    filter.value = newFilter;
+    refreshing.value = true;
+    try {
+        const result = await getTransactions(groupId, {
+            sortAsc: sortAsc.value,
+            memberId: newFilter === 'mine' ? currentMemberId.value ?? undefined : undefined,
+        });
+        transactions.value = result.transactions;
+        hasMoreTransactions.value = result.hasMore;
+    } finally {
+        refreshing.value = false;
     }
 }
 
