@@ -1,7 +1,7 @@
 {
-  "name": "bean-counter",
-  "integrations": {
-    "capacitor": {}
-  },
-  "type": "vue-vite"
+    "name": "bean-counter",
+    "integrations": {
+        "capacitor": {}
+    },
+    "type": "vue-vite"
 }

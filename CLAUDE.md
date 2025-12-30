@@ -46,8 +46,8 @@ src/
 4. **Realtime only for deletes** - We subscribe to transaction delete events to notify users editing a deleted transaction. No presence tracking.
 
 5. **Split system** - Two modes:
-   - Parts mode: proportional splitting (2 parts = double share)
-   - Exact mode: fixed amounts, remainder split among unassigned
+    - Parts mode: proportional splitting (2 parts = double share)
+    - Exact mode: fixed amounts, remainder split among unassigned
 
 6. **Currency conversion** - Uses free exchangerate-api.com, cached 24h in localStorage.
 
@@ -74,6 +74,7 @@ Set in `.env` locally, and in Cloudflare Pages dashboard for production.
 ## Database Schema
 
 Migrations are in `supabase/migrations/`. Key tables:
+
 - `groups` - id, name, default_currency
 - `members` - id, group_id, name
 - `transactions` - id, group_id, type, title, date, amount, currency, payer_id, deleted_at
@@ -81,6 +82,7 @@ Migrations are in `supabase/migrations/`. Key tables:
 - `transaction_changelog` - audit log of all changes
 
 **Transaction types** (`transactions.type`):
+
 - `expense` - Regular expense, payer credited, split members debited
 - `repayment` - Direct payment between members to settle debt
 - `income` - Group receives money (refund/deposit), receiver debited, split members credited
@@ -100,6 +102,7 @@ supabase migration new <name>
 Migrations are in `supabase/migrations/` with timestamp prefixes.
 
 **Important rules:**
+
 - **Never modify existing migrations** - once pushed to production, migrations are immutable
 - Always create new migrations to alter the schema
 - Use `supabase migration new` to generate correct timestamps

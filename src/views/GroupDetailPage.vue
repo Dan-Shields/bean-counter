@@ -1,93 +1,109 @@
 <template>
-  <ion-page>
-    <ion-header :translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start">
-          <ion-back-button default-href="/home"></ion-back-button>
-        </ion-buttons>
-        <ion-title>{{ group?.name || 'Group' }}</ion-title>
-        <ion-buttons slot="end">
-          <ion-button @click="shareGroup">
-            <ion-icon :icon="shareOutline" slot="icon-only"></ion-icon>
-          </ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-      <ion-toolbar>
-        <ion-segment v-model="activeTab">
-          <ion-segment-button value="expenses">
-            <ion-label>Expenses</ion-label>
-          </ion-segment-button>
-          <ion-segment-button value="balances">
-            <ion-label>Balances</ion-label>
-          </ion-segment-button>
-        </ion-segment>
-      </ion-toolbar>
-    </ion-header>
+    <ion-page>
+        <ion-header :translucent="true">
+            <ion-toolbar>
+                <ion-buttons slot="start">
+                    <ion-back-button default-href="/home"></ion-back-button>
+                </ion-buttons>
+                <ion-title>{{ group?.name || 'Group' }}</ion-title>
+                <ion-buttons slot="end">
+                    <ion-button @click="shareGroup">
+                        <ion-icon
+                            :icon="shareOutline"
+                            slot="icon-only"
+                        ></ion-icon>
+                    </ion-button>
+                </ion-buttons>
+            </ion-toolbar>
+            <ion-toolbar>
+                <ion-segment v-model="activeTab">
+                    <ion-segment-button value="expenses">
+                        <ion-label>Expenses</ion-label>
+                    </ion-segment-button>
+                    <ion-segment-button value="balances">
+                        <ion-label>Balances</ion-label>
+                    </ion-segment-button>
+                </ion-segment>
+            </ion-toolbar>
+        </ion-header>
 
-    <ion-content :fullscreen="true">
-      <div v-if="isLoading" class="loading-state">
-        <ion-spinner name="crescent"></ion-spinner>
-      </div>
+        <ion-content :fullscreen="true">
+            <div v-if="isLoading" class="loading-state">
+                <ion-spinner name="crescent"></ion-spinner>
+            </div>
 
-      <template v-else>
-        <TransactionList
-          v-if="activeTab === 'expenses'"
-          :transactions="transactions"
-          :members="members"
-          :current-member-id="currentMemberId"
-          :group-currency="group?.default_currency || 'EUR'"
-          @edit="editTransaction"
-          @delete="deleteTransactionConfirm"
-        />
+            <template v-else>
+                <TransactionList
+                    v-if="activeTab === 'expenses'"
+                    :transactions="transactions"
+                    :members="members"
+                    :current-member-id="currentMemberId"
+                    :group-currency="group?.default_currency || 'EUR'"
+                    @edit="editTransaction"
+                    @delete="deleteTransactionConfirm"
+                />
 
-        <BalanceView
-          v-else
-          :balances="balances"
-          :settlements="settlements"
-          :group-currency="group?.default_currency || 'EUR'"
-          :group-id="groupId"
-          :current-member-id="currentMemberId ?? undefined"
-        />
-      </template>
+                <BalanceView
+                    v-else
+                    :balances="balances"
+                    :settlements="settlements"
+                    :group-currency="group?.default_currency || 'EUR'"
+                    :group-id="groupId"
+                    :current-member-id="currentMemberId ?? undefined"
+                />
+            </template>
 
-      <ion-fab v-if="activeTab === 'expenses'" vertical="bottom" horizontal="end" slot="fixed">
-        <ion-fab-button :router-link="`/group/${groupId}/transaction/new`">
-          <ion-icon :icon="addOutline"></ion-icon>
-        </ion-fab-button>
-      </ion-fab>
-    </ion-content>
-  </ion-page>
+            <ion-fab
+                v-if="activeTab === 'expenses'"
+                vertical="bottom"
+                horizontal="end"
+                slot="fixed"
+            >
+                <ion-fab-button
+                    :router-link="`/group/${groupId}/transaction/new`"
+                >
+                    <ion-icon :icon="addOutline"></ion-icon>
+                </ion-fab-button>
+            </ion-fab>
+        </ion-content>
+    </ion-page>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import {
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  IonButtons,
-  IonBackButton,
-  IonButton,
-  IonIcon,
-  IonSegment,
-  IonSegmentButton,
-  IonLabel,
-  IonFab,
-  IonFabButton,
-  IonSpinner,
-  alertController,
-  toastController,
-} from '@ionic/vue';
 import { addOutline, shareOutline } from 'ionicons/icons';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import BalanceView from '@/components/BalanceView.vue';
+import TransactionList from '@/components/TransactionList.vue';
+import { useBalances } from '@/composables/useBalances';
 import { useGroups } from '@/composables/useGroups';
 import { useTransactions } from '@/composables/useTransactions';
-import { useBalances } from '@/composables/useBalances';
-import TransactionList from '@/components/TransactionList.vue';
-import BalanceView from '@/components/BalanceView.vue';
-import type { Group, Member, TransactionWithDetails, MemberBalance, Settlement } from '@/types';
+import type {
+    Group,
+    Member,
+    MemberBalance,
+    Settlement,
+    TransactionWithDetails,
+} from '@/types';
+import {
+    alertController,
+    IonBackButton,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonFab,
+    IonFabButton,
+    IonHeader,
+    IonIcon,
+    IonLabel,
+    IonPage,
+    IonSegment,
+    IonSegmentButton,
+    IonSpinner,
+    IonTitle,
+    IonToolbar,
+    toastController,
+} from '@ionic/vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -105,111 +121,113 @@ const isLoading = ref(true);
 const currentMemberId = computed(() => getUserMemberIdForGroup(groupId));
 
 const balances = computed<MemberBalance[]>(() => {
-  return calculateBalances(members.value, transactions.value);
+    return calculateBalances(members.value, transactions.value);
 });
 
 const settlements = computed<Settlement[]>(() => {
-  return getSettlements(balances.value);
+    return getSettlements(balances.value);
 });
 
 onMounted(async () => {
-  await loadData();
+    await loadData();
 });
 
 // Reload data when route becomes active (returning from expense form)
 watch(
-  () => route.path,
-  async (newPath) => {
-    if (newPath === `/group/${groupId}`) {
-      await loadData();
-    }
-  }
+    () => route.path,
+    async (newPath) => {
+        if (newPath === `/group/${groupId}`) {
+            await loadData();
+        }
+    },
 );
 
 async function loadData() {
-  isLoading.value = true;
-  try {
-    group.value = await getGroup(groupId);
-    members.value = await getGroupMembers(groupId);
-    transactions.value = await getTransactions(groupId);
-  } catch (error) {
-    console.error('Error loading group data:', error);
-  } finally {
-    isLoading.value = false;
-  }
+    isLoading.value = true;
+    try {
+        group.value = await getGroup(groupId);
+        members.value = await getGroupMembers(groupId);
+        transactions.value = await getTransactions(groupId);
+    } catch (error) {
+        console.error('Error loading group data:', error);
+    } finally {
+        isLoading.value = false;
+    }
 }
 
 function editTransaction(transactionId: string) {
-  router.push(`/group/${groupId}/transaction/${transactionId}`);
+    router.push(`/group/${groupId}/transaction/${transactionId}`);
 }
 
 async function deleteTransactionConfirm(transactionId: string) {
-  const alert = await alertController.create({
-    header: 'Delete Transaction',
-    message: 'Are you sure you want to delete this transaction?',
-    buttons: [
-      {
-        text: 'Cancel',
-        role: 'cancel',
-      },
-      {
-        text: 'Delete',
-        role: 'destructive',
-        handler: async () => {
-          const success = await deleteTransaction(transactionId);
-          if (success) {
-            transactions.value = transactions.value.filter((t) => t.id !== transactionId);
-            const toast = await toastController.create({
-              message: 'Transaction deleted',
-              duration: 2000,
-            });
-            await toast.present();
-          }
-        },
-      },
-    ],
-  });
+    const alert = await alertController.create({
+        header: 'Delete Transaction',
+        message: 'Are you sure you want to delete this transaction?',
+        buttons: [
+            {
+                text: 'Cancel',
+                role: 'cancel',
+            },
+            {
+                text: 'Delete',
+                role: 'destructive',
+                handler: async () => {
+                    const success = await deleteTransaction(transactionId);
+                    if (success) {
+                        transactions.value = transactions.value.filter(
+                            (t) => t.id !== transactionId,
+                        );
+                        const toast = await toastController.create({
+                            message: 'Transaction deleted',
+                            duration: 2000,
+                        });
+                        await toast.present();
+                    }
+                },
+            },
+        ],
+    });
 
-  await alert.present();
+    await alert.present();
 }
 
 async function shareGroup() {
-  const url = `${window.location.origin}/join/${groupId}`;
+    const url = `${window.location.origin}/join/${groupId}`;
 
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: `Join ${group.value?.name} on Bean Counter`,
-        text: 'Track shared expenses with Bean Counter',
-        url,
-      });
-    } catch (error) {
-      // User cancelled or share failed
-      copyToClipboard(url);
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: `Join ${group.value?.name} on Bean Counter`,
+                text: 'Track shared expenses with Bean Counter',
+                url,
+            });
+        } catch (error) {
+            // User cancelled or share failed
+            copyToClipboard(url);
+        }
+    } else {
+        copyToClipboard(url);
     }
-  } else {
-    copyToClipboard(url);
-  }
 }
 
 async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    const toast = await toastController.create({
-      message: 'Link copied to clipboard',
-      duration: 2000,
-    });
-    await toast.present();
-  } catch (error) {
-    console.error('Failed to copy:', error);
-  }
+    try {
+        await navigator.clipboard.writeText(text);
+        const toast = await toastController.create({
+            message: 'Link copied to clipboard',
+            duration: 2000,
+        });
+        await toast.present();
+    } catch (error) {
+        console.error('Failed to copy:', error);
+    }
 }
 </script>
 
 <style scoped>
 .loading-state {
-  display: flex;
-  justify-content: center;
-  padding: 48px;
+    display: flex;
+    justify-content: center;
+    padding: 48px;
 }
 </style>
