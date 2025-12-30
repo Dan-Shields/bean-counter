@@ -14,7 +14,14 @@
         "db:link": "supabase link",
         "db:push": "supabase db push",
         "db:status": "supabase db status",
-        "db:migration:new": "supabase migration new"
+        "db:migration:new": "supabase migration new",
+        "prepare": "simple-git-hooks"
+    },
+    "simple-git-hooks": {
+        "pre-commit": "bunx lint-staged"
+    },
+    "lint-staged": {
+        "*.{js,ts,vue,json,md,css,html}": "prettier --write"
     },
     "dependencies": {
         "@capacitor/app": "8.0.0",
@@ -37,7 +44,9 @@
         "@vue/test-utils": "^2.3.0",
         "cypress": "^13.5.0",
         "jsdom": "^22.1.0",
+        "lint-staged": "^16.2.7",
         "prettier": "^3.7.4",
+        "simple-git-hooks": "^2.13.1",
         "supabase": "^2.70.5",
         "terser": "^5.4.0",
         "typescript": "~5.9.0",
