@@ -1,80 +1,42 @@
-import type {
-    Member,
-    MemberBalance,
-    Settlement,
-    TransactionWithDetails,
-} from '@/types';
+import type { MemberBalance, Settlement } from '@/types';
 import { calculateSettlements } from '@/utils/settlement';
+import { useSupabase } from './useSupabase';
 
 export function useBalances() {
+    const { supabase } = useSupabase();
+
     /**
-     * Calculate balances for all members based on transactions
+     * Fetch balances from the database for a group
      */
-    function calculateBalances(
-        members: Member[],
-        transactions: TransactionWithDetails[],
-    ): MemberBalance[] {
-        const balances: Record<string, number> = {};
+    async function getBalances(groupId: string): Promise<MemberBalance[]> {
+        try {
+            const { data, error } = await supabase
+                .from('member_balances')
+                .select(
+                    `
+                    balance,
+                    member:members!inner(id, name)
+                `,
+                )
+                .eq('group_id', groupId);
 
-        // Initialize balances to 0
-        members.forEach((member) => {
-            balances[member.id] = 0;
-        });
-
-        // Calculate balances from transactions
-        transactions.forEach((transaction) => {
-            const amount =
-                transaction.base_currency_amount || transaction.amount;
-            const type = transaction.type || 'expense'; // Default for legacy data
-
-            // For expense/repayment: payer gets credited (+)
-            // For income: receiver gets debited (-) - they received money and owe it to the group
-            const payerMultiplier = type === 'income' ? -1 : 1;
-            balances[transaction.payer_id] += amount * payerMultiplier;
-
-            // Calculate each member's share
-            const splits = transaction.splits;
-            const exactSplits = splits.filter(
-                (s) => s.exact_amount !== undefined && s.exact_amount !== null,
-            );
-            const partsSplits = splits.filter(
-                (s) => s.exact_amount === undefined || s.exact_amount === null,
-            );
-
-            // For expense/repayment: split members get debited (-)
-            // For income: split members get credited (+) - they're owed their share of the refund
-            const splitMultiplier = type === 'income' ? 1 : -1;
-
-            let totalExactAmount = 0;
-            exactSplits.forEach((split) => {
-                const splitAmount = split.exact_amount || 0;
-                totalExactAmount += splitAmount;
-                balances[split.member_id] += splitAmount * splitMultiplier;
-            });
-
-            // Remaining amount is split by parts
-            const remainingAmount = amount - totalExactAmount;
-            const totalParts = partsSplits.reduce(
-                (sum, split) => sum + (split.parts || 1),
-                0,
-            );
-
-            if (totalParts > 0) {
-                const amountPerPart = remainingAmount / totalParts;
-                partsSplits.forEach((split) => {
-                    const parts = split.parts || 1;
-                    balances[split.member_id] +=
-                        amountPerPart * parts * splitMultiplier;
-                });
+            if (error) {
+                console.error('Error fetching balances:', error);
+                return [];
             }
-        });
 
-        // Convert to array and round to 2 decimal places
-        return members.map((member) => ({
-            member_id: member.id,
-            member_name: member.name,
-            balance: Math.round(balances[member.id] * 100) / 100,
-        }));
+            return (data || []).map((row) => {
+                const member = row.member as unknown as { id: string; name: string };
+                return {
+                    member_id: member.id,
+                    member_name: member.name,
+                    balance: Number(row.balance),
+                };
+            });
+        } catch (error) {
+            console.error('Error in getBalances:', error);
+            return [];
+        }
     }
 
     /**
@@ -94,7 +56,7 @@ export function useBalances() {
     }
 
     return {
-        calculateBalances,
+        getBalances,
         getSettlements,
         getBalancePercentage,
     };
