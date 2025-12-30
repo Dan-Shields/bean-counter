@@ -1,13 +1,21 @@
 <template>
     <div>
-        <ion-segment v-model="filter" class="filter-segment">
-            <ion-segment-button value="all">
-                <ion-label>All</ion-label>
-            </ion-segment-button>
-            <ion-segment-button value="mine">
-                <ion-label>Mine</ion-label>
-            </ion-segment-button>
-        </ion-segment>
+        <div class="toolbar">
+            <ion-segment v-model="filter" class="filter-segment">
+                <ion-segment-button value="all">
+                    <ion-label>All</ion-label>
+                </ion-segment-button>
+                <ion-segment-button value="mine">
+                    <ion-label>Mine</ion-label>
+                </ion-segment-button>
+            </ion-segment>
+            <ion-button fill="clear" size="small" @click="toggleSort">
+                <ion-icon
+                    :icon="sortAsc ? arrowUpOutline : arrowDownOutline"
+                    slot="icon-only"
+                ></ion-icon>
+            </ion-button>
+        </div>
 
         <ion-list v-if="filteredTransactions.length > 0">
             <ion-item-sliding
@@ -103,9 +111,18 @@
                     </ion-item-option>
                 </ion-item-options>
             </ion-item-sliding>
+
+            <ion-infinite-scroll
+                v-if="hasMore"
+                @ionInfinite="$emit('loadMore', $event)"
+            >
+                <ion-infinite-scroll-content
+                    loading-spinner="crescent"
+                ></ion-infinite-scroll-content>
+            </ion-infinite-scroll>
         </ion-list>
 
-        <div v-else class="empty-state">
+        <div v-else-if="!isLoading" class="empty-state">
             <ion-icon :icon="receiptOutline" class="empty-icon"></ion-icon>
             <h2>No transactions yet</h2>
             <p>Tap the + button to add your first transaction</p>
@@ -115,6 +132,8 @@
 
 <script setup lang="ts">
 import {
+    arrowDownOutline,
+    arrowUpOutline,
     cartOutline,
     receiptOutline,
     swapHorizontalOutline,
@@ -125,7 +144,10 @@ import { computed, ref } from 'vue';
 import type { Member, TransactionWithDetails } from '@/types';
 import { formatCurrency } from '@/utils/currency';
 import {
+    IonButton,
     IonIcon,
+    IonInfiniteScroll,
+    IonInfiniteScrollContent,
     IonItem,
     IonItemOption,
     IonItemOptions,
@@ -136,24 +158,31 @@ import {
     IonSegment,
     IonSegmentButton,
 } from '@ionic/vue';
+import type { InfiniteScrollCustomEvent } from '@ionic/vue';
 
 const props = defineProps<{
     transactions: TransactionWithDetails[];
     members: Member[];
     currentMemberId: string | null;
     groupCurrency: string;
+    hasMore?: boolean;
+    isLoading?: boolean;
 }>();
 
 defineEmits<{
     edit: [transactionId: string];
     delete: [transactionId: string];
+    loadMore: [event: InfiniteScrollCustomEvent];
 }>();
 
 const filter = ref('all');
+const sortAsc = ref(false);
 
 const filteredTransactions = computed(() => {
+    let result = props.transactions;
+
     if (filter.value === 'mine' && props.currentMemberId) {
-        return props.transactions.filter((transaction) => {
+        result = result.filter((transaction) => {
             // Include if user paid or is in splits
             if (transaction.payer_id === props.currentMemberId) return true;
             return transaction.splits.some(
@@ -161,8 +190,19 @@ const filteredTransactions = computed(() => {
             );
         });
     }
-    return props.transactions;
+
+    if (sortAsc.value) {
+        return [...result].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        );
+    }
+
+    return result;
 });
+
+function toggleSort() {
+    sortAsc.value = !sortAsc.value;
+}
 
 function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
@@ -188,8 +228,15 @@ function getRecipientName(transaction: TransactionWithDetails): string {
 </script>
 
 <style scoped>
+.toolbar {
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 16px;
+    gap: 8px;
+}
+
 .filter-segment {
-    margin: 8px 16px;
+    flex: 1;
 }
 
 .type-icon {

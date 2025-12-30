@@ -28,6 +28,15 @@
         </ion-header>
 
         <ion-content :fullscreen="true">
+            <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+                <ion-refresher-content></ion-refresher-content>
+            </ion-refresher>
+
+            <div v-if="hasUpdates" class="updates-banner" @click="refreshData">
+                <ion-icon :icon="refreshOutline"></ion-icon>
+                <span>Changes available - tap to refresh</span>
+            </div>
+
             <div v-if="isLoading" class="loading-state">
                 <ion-spinner name="crescent"></ion-spinner>
             </div>
@@ -39,8 +48,11 @@
                     :members="members"
                     :current-member-id="currentMemberId"
                     :group-currency="group?.default_currency || 'EUR'"
+                    :has-more="hasMoreTransactions"
+                    :is-loading="isLoading"
                     @edit="editTransaction"
                     @delete="deleteTransactionConfirm"
+                    @load-more="loadMoreTransactions"
                 />
 
                 <BalanceView
@@ -70,8 +82,8 @@
 </template>
 
 <script setup lang="ts">
-import { addOutline, shareOutline } from 'ionicons/icons';
-import { computed, onMounted, ref, watch } from 'vue';
+import { addOutline, refreshOutline, shareOutline } from 'ionicons/icons';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BalanceView from '@/components/BalanceView.vue';
 import TransactionList from '@/components/TransactionList.vue';
@@ -97,6 +109,8 @@ import {
     IonIcon,
     IonLabel,
     IonPage,
+    IonRefresher,
+    IonRefresherContent,
     IonSegment,
     IonSegmentButton,
     IonSpinner,
@@ -104,25 +118,31 @@ import {
     IonToolbar,
     toastController,
 } from '@ionic/vue';
+import type { InfiniteScrollCustomEvent, RefresherCustomEvent } from '@ionic/vue';
 
 const route = useRoute();
 const router = useRouter();
 const { getGroup, getGroupMembers, getUserMemberIdForGroup } = useGroups();
-const { getTransactions, deleteTransaction } = useTransactions();
-const { calculateBalances, getSettlements } = useBalances();
+const {
+    getTransactions,
+    deleteTransaction,
+    subscribeToGroupTransactions,
+} = useTransactions();
+const { getBalances, getSettlements } = useBalances();
 
 const groupId = route.params.groupId as string;
 const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
 const transactions = ref<TransactionWithDetails[]>([]);
+const balances = ref<MemberBalance[]>([]);
 const activeTab = ref('expenses');
 const isLoading = ref(true);
+const hasUpdates = ref(false);
+const hasMoreTransactions = ref(false);
+
+let unsubscribe: (() => void) | null = null;
 
 const currentMemberId = computed(() => getUserMemberIdForGroup(groupId));
-
-const balances = computed<MemberBalance[]>(() => {
-    return calculateBalances(members.value, transactions.value);
-});
 
 const settlements = computed<Settlement[]>(() => {
     return getSettlements(balances.value);
@@ -130,6 +150,17 @@ const settlements = computed<Settlement[]>(() => {
 
 onMounted(async () => {
     await loadData();
+
+    // Subscribe to transaction changes
+    unsubscribe = subscribeToGroupTransactions(groupId, () => {
+        hasUpdates.value = true;
+    });
+});
+
+onUnmounted(() => {
+    if (unsubscribe) {
+        unsubscribe();
+    }
 });
 
 // Reload data when route becomes active (returning from expense form)
@@ -137,6 +168,7 @@ watch(
     () => route.path,
     async (newPath) => {
         if (newPath === `/group/${groupId}`) {
+            hasUpdates.value = false;
             await loadData();
         }
     },
@@ -147,12 +179,40 @@ async function loadData() {
     try {
         group.value = await getGroup(groupId);
         members.value = await getGroupMembers(groupId);
-        transactions.value = await getTransactions(groupId);
+        const result = await getTransactions(groupId);
+        transactions.value = result.transactions;
+        hasMoreTransactions.value = result.hasMore;
+        balances.value = await getBalances(groupId);
     } catch (error) {
         console.error('Error loading group data:', error);
     } finally {
         isLoading.value = false;
     }
+}
+
+async function loadMoreTransactions(event: InfiniteScrollCustomEvent) {
+    try {
+        const result = await getTransactions(groupId, {
+            offset: transactions.value.length,
+        });
+        transactions.value = [...transactions.value, ...result.transactions];
+        hasMoreTransactions.value = result.hasMore;
+    } catch (error) {
+        console.error('Error loading more transactions:', error);
+    } finally {
+        event.target.complete();
+    }
+}
+
+async function refreshData() {
+    hasUpdates.value = false;
+    await loadData();
+}
+
+async function handleRefresh(event: RefresherCustomEvent) {
+    hasUpdates.value = false;
+    await loadData();
+    event.target.complete();
 }
 
 function editTransaction(transactionId: string) {
@@ -229,5 +289,26 @@ async function copyToClipboard(text: string) {
     display: flex;
     justify-content: center;
     padding: 48px;
+}
+
+.updates-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--ion-color-primary);
+    color: var(--ion-color-primary-contrast);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.updates-banner:active {
+    opacity: 0.8;
+}
+
+.updates-banner ion-icon {
+    font-size: 18px;
 }
 </style>

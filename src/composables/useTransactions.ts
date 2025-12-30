@@ -12,13 +12,19 @@ import { useSupabase } from './useSupabase';
 export function useTransactions() {
     const { supabase } = useSupabase();
 
+    const PAGE_SIZE = 20;
+
     /**
-     * Get all transactions for a group
+     * Get transactions for a group with pagination
      */
     async function getTransactions(
         groupId: string,
-    ): Promise<TransactionWithDetails[]> {
+        options?: { limit?: number; offset?: number },
+    ): Promise<{ transactions: TransactionWithDetails[]; hasMore: boolean }> {
         try {
+            const limit = options?.limit ?? PAGE_SIZE;
+            const offset = options?.offset ?? 0;
+
             const { data, error } = await supabase
                 .from('transactions')
                 .select(
@@ -34,17 +40,25 @@ export function useTransactions() {
                 .eq('group_id', groupId)
                 .is('deleted_at', null)
                 .order('date', { ascending: false })
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit);
 
             if (error) {
                 console.error('Error fetching transactions:', error);
-                return [];
+                return { transactions: [], hasMore: false };
             }
 
-            return data || [];
+            const transactions = data || [];
+            // If we got more than limit, there are more to load
+            const hasMore = transactions.length > limit;
+
+            return {
+                transactions: hasMore ? transactions.slice(0, limit) : transactions,
+                hasMore,
+            };
         } catch (error) {
             console.error('Error in getTransactions:', error);
-            return [];
+            return { transactions: [], hasMore: false };
         }
     }
 
@@ -305,6 +319,35 @@ export function useTransactions() {
         };
     }
 
+    /**
+     * Subscribe to all transaction changes for a group
+     * Calls onChange when any transaction in the group is inserted, updated, or deleted
+     */
+    function subscribeToGroupTransactions(
+        groupId: string,
+        onChange: () => void,
+    ) {
+        const channel = supabase
+            .channel(`group_transactions_${groupId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'transactions',
+                    filter: `group_id=eq.${groupId}`,
+                },
+                () => {
+                    onChange();
+                },
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }
+
     return {
         getTransactions,
         getTransaction,
@@ -312,5 +355,6 @@ export function useTransactions() {
         updateTransaction,
         deleteTransaction,
         subscribeToTransactionDeletes,
+        subscribeToGroupTransactions,
     };
 }
