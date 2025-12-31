@@ -13,6 +13,12 @@
                             slot="icon-only"
                         ></ion-icon>
                     </ion-button>
+                    <ion-button @click="openSettings">
+                        <ion-icon
+                            :icon="settingsOutline"
+                            slot="icon-only"
+                        ></ion-icon>
+                    </ion-button>
                 </ion-buttons>
             </ion-toolbar>
             <ion-toolbar>
@@ -83,11 +89,75 @@
                 </ion-fab-button>
             </ion-fab>
         </ion-content>
+
+        <ion-modal
+            :is-open="showIdentityModal"
+            :backdrop-dismiss="false"
+            :can-dismiss="!!currentMemberId"
+        >
+            <ion-header>
+                <ion-toolbar>
+                    <ion-title>Who are you?</ion-title>
+                </ion-toolbar>
+            </ion-header>
+            <ion-content class="ion-padding">
+                <p class="identity-intro">
+                    Select your name to track your expenses and balances.
+                </p>
+                <ion-list>
+                    <ion-radio-group v-model="selectedMemberId">
+                        <ion-item v-for="member in members" :key="member.id">
+                            <ion-radio
+                                :value="member.id"
+                                justify="start"
+                                label-placement="end"
+                            >
+                                {{ member.name }}
+                            </ion-radio>
+                        </ion-item>
+                        <ion-item>
+                            <ion-radio
+                                value="new"
+                                justify="start"
+                                label-placement="end"
+                            >
+                                I'm someone new
+                            </ion-radio>
+                        </ion-item>
+                    </ion-radio-group>
+                </ion-list>
+                <ion-list v-if="selectedMemberId === 'new'">
+                    <ion-item>
+                        <ion-input
+                            v-model="newMemberName"
+                            label="Your Name"
+                            label-placement="stacked"
+                            placeholder="Enter your name"
+                            :clear-input="true"
+                        ></ion-input>
+                    </ion-item>
+                </ion-list>
+                <ion-button
+                    expand="block"
+                    :disabled="!canConfirmIdentity"
+                    :loading="isConfirmingIdentity"
+                    @click="confirmIdentity"
+                    class="confirm-button"
+                >
+                    Continue
+                </ion-button>
+            </ion-content>
+        </ion-modal>
     </ion-page>
 </template>
 
 <script setup lang="ts">
-import { addOutline, refreshOutline, shareOutline } from 'ionicons/icons';
+import {
+    addOutline,
+    refreshOutline,
+    settingsOutline,
+    shareOutline,
+} from 'ionicons/icons';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BalanceView from '@/components/BalanceView.vue';
@@ -112,8 +182,14 @@ import {
     IonFabButton,
     IonHeader,
     IonIcon,
+    IonInput,
+    IonItem,
     IonLabel,
+    IonList,
+    IonModal,
     IonPage,
+    IonRadio,
+    IonRadioGroup,
     IonRefresher,
     IonRefresherContent,
     IonSegment,
@@ -130,7 +206,13 @@ import type {
 
 const route = useRoute();
 const router = useRouter();
-const { getGroup, getGroupMembers, getUserMemberIdForGroup } = useGroups();
+const {
+    getGroup,
+    getGroupMembers,
+    getUserMemberIdForGroup,
+    saveGroupMembership,
+    addMember,
+} = useGroups();
 const { getTransactions, deleteTransaction, subscribeToGroupTransactions } =
     useTransactions();
 const { getBalances, getSettlements } = useBalances();
@@ -147,10 +229,21 @@ const hasMoreTransactions = ref(false);
 const sortAsc = ref(false);
 const filter = ref<'all' | 'mine'>('all');
 const refreshing = ref(false);
+const showIdentityModal = ref(false);
+const selectedMemberId = ref<string>('');
+const newMemberName = ref('');
+const isConfirmingIdentity = ref(false);
 
 let unsubscribe: (() => void) | null = null;
 
-const currentMemberId = computed(() => getUserMemberIdForGroup(groupId));
+const canConfirmIdentity = computed(() => {
+    if (selectedMemberId.value === 'new') {
+        return newMemberName.value.trim() !== '';
+    }
+    return selectedMemberId.value !== '';
+});
+
+const currentMemberId = ref<string | null>(getUserMemberIdForGroup(groupId));
 
 const settlements = computed<Settlement[]>(() => {
     return getSettlements(balances.value);
@@ -158,6 +251,11 @@ const settlements = computed<Settlement[]>(() => {
 
 onMounted(async () => {
     await loadData();
+
+    // Check if user needs to select their identity
+    if (!currentMemberId.value && members.value.length > 0) {
+        showIdentityModal.value = true;
+    }
 
     // Subscribe to transaction changes
     unsubscribe = subscribeToGroupTransactions(groupId, () => {
@@ -337,6 +435,45 @@ async function copyToClipboard(text: string) {
         console.error('Failed to copy:', error);
     }
 }
+
+async function confirmIdentity() {
+    if (!canConfirmIdentity.value) return;
+
+    isConfirmingIdentity.value = true;
+    try {
+        let memberId = selectedMemberId.value;
+
+        if (memberId === 'new') {
+            const newMember = await addMember(
+                groupId,
+                newMemberName.value.trim(),
+            );
+            if (!newMember) {
+                const toast = await toastController.create({
+                    message: 'Failed to create member. Please try again.',
+                    duration: 3000,
+                    color: 'danger',
+                });
+                await toast.present();
+                return;
+            }
+            memberId = newMember.id;
+            members.value = [...members.value, newMember];
+        }
+
+        saveGroupMembership(groupId, memberId);
+        currentMemberId.value = memberId;
+        showIdentityModal.value = false;
+        newMemberName.value = '';
+        selectedMemberId.value = '';
+    } finally {
+        isConfirmingIdentity.value = false;
+    }
+}
+
+function openSettings() {
+    router.push(`/group/${groupId}/settings`);
+}
 </script>
 
 <style scoped>
@@ -365,5 +502,15 @@ async function copyToClipboard(text: string) {
 
 .updates-banner ion-icon {
     font-size: 18px;
+}
+
+.identity-intro {
+    text-align: center;
+    color: var(--ion-color-medium);
+    margin-bottom: 16px;
+}
+
+.confirm-button {
+    margin-top: 24px;
 }
 </style>

@@ -27,6 +27,11 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('@/views/GroupDetailPage.vue'),
     },
     {
+        path: '/group/:groupId/settings',
+        name: 'GroupSettings',
+        component: () => import('@/views/GroupSettingsPage.vue'),
+    },
+    {
         path: '/group/:groupId/transaction/new',
         name: 'NewTransaction',
         component: () => import('@/views/TransactionFormPage.vue'),
