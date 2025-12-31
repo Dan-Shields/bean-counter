@@ -8,6 +8,15 @@
                     ></ion-back-button>
                 </ion-buttons>
                 <ion-title>Settings</ion-title>
+                <ion-buttons slot="end">
+                    <ion-button
+                        :disabled="!hasChanges || isSaving"
+                        @click="saveChanges"
+                    >
+                        <span v-if="isSaving">Saving...</span>
+                        <span v-else>Save</span>
+                    </ion-button>
+                </ion-buttons>
             </ion-toolbar>
         </ion-header>
 
@@ -20,32 +29,22 @@
                 <ion-list-header>
                     <ion-label>Your Identity</ion-label>
                 </ion-list-header>
-                <ion-list>
-                    <ion-radio-group
-                        :value="currentMemberId"
-                        @ionChange="changeIdentity($event.detail.value)"
-                    >
-                        <ion-item v-for="member in members" :key="member.id">
-                            <ion-radio
-                                :value="member.id"
-                                justify="start"
-                                label-placement="end"
-                            >
-                                {{ member.name }}
-                            </ion-radio>
-                        </ion-item>
-                    </ion-radio-group>
-                </ion-list>
+                <IdentityPicker
+                    v-model="selectedMemberId"
+                    v-model:new-member-name="newMemberName"
+                    :members="members"
+                />
 
                 <ion-list-header>
                     <ion-label>Group</ion-label>
                 </ion-list-header>
                 <ion-list>
                     <ion-item>
-                        <ion-label>
-                            <h2>{{ group?.name }}</h2>
-                            <p>Group name</p>
-                        </ion-label>
+                        <ion-input
+                            v-model="groupName"
+                            label="Group name"
+                            label-placement="stacked"
+                        ></ion-input>
                     </ion-item>
                     <ion-item>
                         <ion-label>
@@ -77,23 +76,24 @@
 
 <script setup lang="ts">
 import { shareOutline } from 'ionicons/icons';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import IdentityPicker from '@/components/IdentityPicker.vue';
 import { useGroups } from '@/composables/useGroups';
 import type { Group, Member } from '@/types';
 import {
     IonBackButton,
+    IonButton,
     IonButtons,
     IonContent,
     IonHeader,
     IonIcon,
+    IonInput,
     IonItem,
     IonLabel,
     IonList,
     IonListHeader,
     IonPage,
-    IonRadio,
-    IonRadioGroup,
     IonSpinner,
     IonTitle,
     IonToolbar,
@@ -106,19 +106,48 @@ const {
     getGroupMembers,
     getUserMemberIdForGroup,
     saveGroupMembership,
+    addMember,
+    updateGroup,
 } = useGroups();
 
 const groupId = route.params.groupId as string;
 const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
-const currentMemberId = ref<string | null>(null);
 const isLoading = ref(true);
+const isSaving = ref(false);
+
+// Form state
+const groupName = ref('');
+const selectedMemberId = ref<string | null>(null);
+const newMemberName = ref('');
+
+// Original values to detect changes
+const originalName = ref('');
+const originalMemberId = ref<string | null>(null);
+
+const hasChanges = computed(() => {
+    const nameChanged = groupName.value.trim() !== originalName.value;
+    const identityChanged = selectedMemberId.value !== originalMemberId.value;
+    const isValidNewMember =
+        selectedMemberId.value === 'new' && newMemberName.value.trim() !== '';
+    return (
+        nameChanged ||
+        (identityChanged &&
+            (selectedMemberId.value !== 'new' || isValidNewMember))
+    );
+});
 
 onMounted(async () => {
     try {
         group.value = await getGroup(groupId);
         members.value = await getGroupMembers(groupId);
-        currentMemberId.value = getUserMemberIdForGroup(groupId);
+
+        const memberId = getUserMemberIdForGroup(groupId);
+        selectedMemberId.value = memberId;
+        originalMemberId.value = memberId;
+
+        groupName.value = group.value?.name || '';
+        originalName.value = group.value?.name || '';
     } catch (error) {
         console.error('Error loading settings:', error);
     } finally {
@@ -126,16 +155,69 @@ onMounted(async () => {
     }
 });
 
-async function changeIdentity(memberId: string) {
-    saveGroupMembership(groupId, memberId);
-    currentMemberId.value = memberId;
+async function saveChanges() {
+    if (!hasChanges.value) return;
 
-    const member = members.value.find((m) => m.id === memberId);
-    const toast = await toastController.create({
-        message: `You are now ${member?.name}`,
-        duration: 2000,
-    });
-    await toast.present();
+    isSaving.value = true;
+    try {
+        // Handle identity change
+        if (
+            selectedMemberId.value &&
+            selectedMemberId.value !== originalMemberId.value
+        ) {
+            let memberId = selectedMemberId.value;
+
+            // Create new member if needed
+            if (memberId === 'new') {
+                const newMember = await addMember(
+                    groupId,
+                    newMemberName.value.trim(),
+                );
+                if (!newMember) {
+                    const toast = await toastController.create({
+                        message: 'Failed to create member',
+                        duration: 2000,
+                        color: 'danger',
+                    });
+                    await toast.present();
+                    return;
+                }
+                memberId = newMember.id;
+                members.value = [...members.value, newMember];
+                selectedMemberId.value = memberId;
+                newMemberName.value = '';
+            }
+
+            saveGroupMembership(groupId, memberId);
+            originalMemberId.value = memberId;
+        }
+
+        // Save group name if changed
+        const newName = groupName.value.trim();
+        if (newName !== originalName.value) {
+            const updated = await updateGroup(groupId, { name: newName });
+            if (updated) {
+                group.value = updated;
+                originalName.value = newName;
+            } else {
+                const toast = await toastController.create({
+                    message: 'Failed to save settings',
+                    duration: 2000,
+                    color: 'danger',
+                });
+                await toast.present();
+                return;
+            }
+        }
+
+        const toast = await toastController.create({
+            message: 'Settings saved',
+            duration: 2000,
+        });
+        await toast.present();
+    } finally {
+        isSaving.value = false;
+    }
 }
 
 async function shareGroup() {

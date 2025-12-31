@@ -35,40 +35,11 @@
                     <ion-label>Who are you?</ion-label>
                 </ion-list-header>
 
-                <ion-list>
-                    <ion-radio-group v-model="selectedMemberId">
-                        <ion-item v-for="member in members" :key="member.id">
-                            <ion-radio
-                                :value="member.id"
-                                justify="start"
-                                label-placement="end"
-                            >
-                                {{ member.name }}
-                            </ion-radio>
-                        </ion-item>
-                        <ion-item>
-                            <ion-radio
-                                value="new"
-                                justify="start"
-                                label-placement="end"
-                            >
-                                I'm someone new
-                            </ion-radio>
-                        </ion-item>
-                    </ion-radio-group>
-                </ion-list>
-
-                <ion-list v-if="selectedMemberId === 'new'">
-                    <ion-item>
-                        <ion-input
-                            v-model="newMemberName"
-                            label="Your Name"
-                            label-placement="stacked"
-                            placeholder="Enter your name"
-                            :clear-input="true"
-                        ></ion-input>
-                    </ion-item>
-                </ion-list>
+                <IdentityPicker
+                    v-model="selectedMemberId"
+                    v-model:new-member-name="newMemberName"
+                    :members="members"
+                />
 
                 <div class="ion-padding">
                     <ion-button
@@ -92,6 +63,7 @@
 import { alertCircleOutline } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import IdentityPicker from '@/components/IdentityPicker.vue';
 import { useGroups } from '@/composables/useGroups';
 import type { Group, Member } from '@/types';
 import {
@@ -101,14 +73,9 @@ import {
     IonContent,
     IonHeader,
     IonIcon,
-    IonInput,
-    IonItem,
     IonLabel,
-    IonList,
     IonListHeader,
     IonPage,
-    IonRadio,
-    IonRadioGroup,
     IonSpinner,
     IonTitle,
     IonToolbar,
