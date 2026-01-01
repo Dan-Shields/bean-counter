@@ -69,18 +69,40 @@
                         <ion-label>Invite others to this group</ion-label>
                     </ion-item>
                 </ion-list>
+
+                <ion-list-header>
+                    <ion-label>Export</ion-label>
+                </ion-list-header>
+                <ion-list>
+                    <ion-item
+                        button
+                        :disabled="isExporting"
+                        @click="exportTransactions"
+                    >
+                        <ion-icon
+                            :icon="downloadOutline"
+                            slot="start"
+                        ></ion-icon>
+                        <ion-label>
+                            <span v-if="isExporting">Exporting...</span>
+                            <span v-else>Export transactions as CSV</span>
+                        </ion-label>
+                    </ion-item>
+                </ion-list>
             </template>
         </ion-content>
     </ion-page>
 </template>
 
 <script setup lang="ts">
-import { shareOutline } from 'ionicons/icons';
+import { downloadOutline, shareOutline } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import IdentityPicker from '@/components/IdentityPicker.vue';
 import { useGroups } from '@/composables/useGroups';
+import { useTransactions } from '@/composables/useTransactions';
 import type { Group, Member } from '@/types';
+import { downloadCSV, generateTransactionCSV } from '@/utils/csvExport';
 import {
     IonBackButton,
     IonButton,
@@ -109,12 +131,14 @@ const {
     addMember,
     updateGroup,
 } = useGroups();
+const { getAllTransactions } = useTransactions();
 
 const groupId = route.params.groupId as string;
 const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
 const isLoading = ref(true);
 const isSaving = ref(false);
+const isExporting = ref(false);
 
 // Form state
 const groupName = ref('');
@@ -248,6 +272,51 @@ async function copyToClipboard(text: string) {
         await toast.present();
     } catch (error) {
         console.error('Failed to copy:', error);
+    }
+}
+
+async function exportTransactions() {
+    isExporting.value = true;
+    try {
+        const transactions = await getAllTransactions(groupId);
+
+        if (transactions.length === 0) {
+            const toast = await toastController.create({
+                message: 'No transactions to export',
+                duration: 2000,
+            });
+            await toast.present();
+            return;
+        }
+
+        const csv = generateTransactionCSV(
+            transactions,
+            members.value,
+            group.value?.default_currency || 'EUR',
+        );
+        const date = new Date().toISOString().split('T')[0];
+        const safeName = (group.value?.name || 'group')
+            .replace(/[^a-z0-9]/gi, '-')
+            .toLowerCase();
+        const filename = `${safeName}-transactions-${date}.csv`;
+
+        downloadCSV(csv, filename);
+
+        const toast = await toastController.create({
+            message: `Exported ${transactions.length} transactions`,
+            duration: 2000,
+        });
+        await toast.present();
+    } catch (error) {
+        console.error('Export failed:', error);
+        const toast = await toastController.create({
+            message: 'Failed to export transactions',
+            duration: 2000,
+            color: 'danger',
+        });
+        await toast.present();
+    } finally {
+        isExporting.value = false;
     }
 }
 </script>

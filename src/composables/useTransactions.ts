@@ -93,6 +93,45 @@ export function useTransactions() {
     }
 
     /**
+     * Get all transactions for a group (no pagination, for export)
+     */
+    async function getAllTransactions(
+        groupId: string,
+        options?: { sortAsc?: boolean },
+    ): Promise<TransactionWithDetails[]> {
+        try {
+            const ascending = options?.sortAsc ?? false;
+
+            const { data, error } = await supabase
+                .from('transactions')
+                .select(
+                    `
+          *,
+          payer:members!expenses_payer_id_fkey(*),
+          splits:transaction_splits(
+            *,
+            member:members(*)
+          )
+        `,
+                )
+                .eq('group_id', groupId)
+                .is('deleted_at', null)
+                .order('date', { ascending })
+                .order('created_at', { ascending });
+
+            if (error) {
+                console.error('Error fetching all transactions:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('Error in getAllTransactions:', error);
+            return [];
+        }
+    }
+
+    /**
      * Get a single transaction by ID
      */
     async function getTransaction(
@@ -380,6 +419,7 @@ export function useTransactions() {
 
     return {
         getTransactions,
+        getAllTransactions,
         getTransaction,
         createTransaction,
         updateTransaction,
