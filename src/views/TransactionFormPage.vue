@@ -109,6 +109,7 @@
                         <ion-select-option value="DKK">DKK</ion-select-option>
                         <ion-select-option value="SEK">SEK</ion-select-option>
                         <ion-select-option value="NOK">NOK</ion-select-option>
+                        <ion-select-option value="ISK">ISK</ion-select-option>
                         <ion-select-option value="CHF">CHF</ion-select-option>
                         <ion-select-option value="JPY">JPY</ion-select-option>
                     </ion-select>

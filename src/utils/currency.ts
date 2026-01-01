@@ -94,13 +94,14 @@ export function formatCurrency(amount: number, currency: string): string {
         GBP: '£',
         JPY: '¥',
         DKK: 'kr',
+        ISK: 'kr',
     };
 
     const symbol = symbols[currency] || currency;
     const formatted = amount.toFixed(2);
 
-    // For DKK and some currencies, put symbol after
-    if (currency === 'DKK') {
+    // For Nordic currencies, put symbol after
+    if (currency === 'DKK' || currency === 'ISK') {
         return `${formatted} ${symbol}`;
     }
 

@@ -46,6 +46,9 @@
                         <ion-select-option value="NOK"
                             >NOK - Norwegian Krone</ion-select-option
                         >
+                        <ion-select-option value="ISK"
+                            >ISK - Icelandic Króna</ion-select-option
+                        >
                         <ion-select-option value="CHF"
                             >CHF - Swiss Franc</ion-select-option
                         >
