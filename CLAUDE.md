@@ -19,10 +19,12 @@ src/
 │   ├── CreateGroupPage.vue     # Create new group with members
 │   ├── JoinGroupPage.vue       # Join group via link, pick member identity
 │   ├── GroupDetailPage.vue     # Tabs: Transactions list + Balances
+│   ├── GroupSettingsPage.vue   # Group settings, identity, CSV export
 │   └── TransactionFormPage.vue # Create/edit transaction with splits
 ├── components/
 │   ├── TransactionList.vue     # Transaction list with filter, sort, infinite scroll
-│   └── BalanceView.vue         # Balance bars + settlement suggestions
+│   ├── BalanceView.vue         # Balance bars + settlement suggestions
+│   └── IdentityPicker.vue      # Member identity selection with "new member" option
 ├── composables/
 │   ├── useSupabase.ts          # Supabase client singleton
 │   ├── useGroups.ts            # Group CRUD + local storage for memberships
@@ -30,7 +32,8 @@ src/
 │   └── useBalances.ts          # Fetch server balances + settlement algorithm
 ├── utils/
 │   ├── settlement.ts           # Greedy algorithm to minimize transactions
-│   └── currency.ts             # Exchange rate API (24h cache) + formatting
+│   ├── currency.ts             # Currency list, exchange rate API (24h cache) + formatting
+│   └── csvExport.ts            # Transaction CSV export
 └── types/
     └── index.ts                # All TypeScript interfaces
 
@@ -108,6 +111,6 @@ supabase migration new <name> # Create new migration (generates timestamp)
 
 ## Common Tasks
 
-**Add a new currency**: Update the `<ion-select>` options in `CreateGroupPage.vue` and `TransactionFormPage.vue`, plus the symbols map in `currency.ts`.
+**Add a new currency**: Add an entry to the `currencies` array in `src/utils/currency.ts`. The forms use `v-for` over this list.
 
 **Build for mobile**: Run `ionic capacitor add ios` or `android`, then build with Xcode/Android Studio.
