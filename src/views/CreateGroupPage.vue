@@ -28,33 +28,13 @@
                         label-placement="stacked"
                         interface="action-sheet"
                     >
-                        <ion-select-option value="EUR"
-                            >EUR - Euro</ion-select-option
+                        <ion-select-option
+                            v-for="currency in currencies"
+                            :key="currency.code"
+                            :value="currency.code"
                         >
-                        <ion-select-option value="USD"
-                            >USD - US Dollar</ion-select-option
-                        >
-                        <ion-select-option value="GBP"
-                            >GBP - British Pound</ion-select-option
-                        >
-                        <ion-select-option value="DKK"
-                            >DKK - Danish Krone</ion-select-option
-                        >
-                        <ion-select-option value="SEK"
-                            >SEK - Swedish Krona</ion-select-option
-                        >
-                        <ion-select-option value="NOK"
-                            >NOK - Norwegian Krone</ion-select-option
-                        >
-                        <ion-select-option value="ISK"
-                            >ISK - Icelandic Króna</ion-select-option
-                        >
-                        <ion-select-option value="CHF"
-                            >CHF - Swiss Franc</ion-select-option
-                        >
-                        <ion-select-option value="JPY"
-                            >JPY - Japanese Yen</ion-select-option
-                        >
+                            {{ currency.code }} - {{ currency.name }}
+                        </ion-select-option>
                     </ion-select>
                 </ion-item>
             </ion-list>
@@ -110,6 +90,7 @@ import { addOutline, closeOutline } from 'ionicons/icons';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGroups } from '@/composables/useGroups';
+import { currencies } from '@/utils/currency';
 import {
     IonBackButton,
     IonButton,

@@ -1,3 +1,24 @@
+export interface Currency {
+    code: string;
+    name: string;
+    symbol: string;
+    symbolAfter?: boolean;
+}
+
+export const currencies: Currency[] = [
+    { code: 'EUR', name: 'Euro', symbol: '€' },
+    { code: 'USD', name: 'US Dollar', symbol: '$' },
+    { code: 'GBP', name: 'British Pound', symbol: '£' },
+    { code: 'DKK', name: 'Danish Krone', symbol: 'kr', symbolAfter: true },
+    { code: 'SEK', name: 'Swedish Krona', symbol: 'kr', symbolAfter: true },
+    { code: 'NOK', name: 'Norwegian Krone', symbol: 'kr', symbolAfter: true },
+    { code: 'ISK', name: 'Icelandic Króna', symbol: 'kr', symbolAfter: true },
+    { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
+    { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+];
+
+const currencyMap = new Map(currencies.map((c) => [c.code, c]));
+
 const CACHE_KEY = 'currency_rates';
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -88,20 +109,11 @@ export async function convertCurrency(
  * Format currency amount with symbol
  */
 export function formatCurrency(amount: number, currency: string): string {
-    const symbols: Record<string, string> = {
-        USD: '$',
-        EUR: '€',
-        GBP: '£',
-        JPY: '¥',
-        DKK: 'kr',
-        ISK: 'kr',
-    };
-
-    const symbol = symbols[currency] || currency;
+    const curr = currencyMap.get(currency);
+    const symbol = curr?.symbol || currency;
     const formatted = amount.toFixed(2);
 
-    // For Nordic currencies, put symbol after
-    if (currency === 'DKK' || currency === 'ISK') {
+    if (curr?.symbolAfter) {
         return `${formatted} ${symbol}`;
     }
 

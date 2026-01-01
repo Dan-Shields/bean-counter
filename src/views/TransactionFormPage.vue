@@ -103,15 +103,13 @@
                         label-placement="stacked"
                         interface="action-sheet"
                     >
-                        <ion-select-option value="EUR">EUR</ion-select-option>
-                        <ion-select-option value="USD">USD</ion-select-option>
-                        <ion-select-option value="GBP">GBP</ion-select-option>
-                        <ion-select-option value="DKK">DKK</ion-select-option>
-                        <ion-select-option value="SEK">SEK</ion-select-option>
-                        <ion-select-option value="NOK">NOK</ion-select-option>
-                        <ion-select-option value="ISK">ISK</ion-select-option>
-                        <ion-select-option value="CHF">CHF</ion-select-option>
-                        <ion-select-option value="JPY">JPY</ion-select-option>
+                        <ion-select-option
+                            v-for="currency in currencies"
+                            :key="currency.code"
+                            :value="currency.code"
+                        >
+                            {{ currency.code }}
+                        </ion-select-option>
                     </ion-select>
                 </ion-item>
 
@@ -314,7 +312,7 @@ import type {
     TransactionFormData,
     TransactionType,
 } from '@/types';
-import { formatCurrency } from '@/utils/currency';
+import { currencies, formatCurrency } from '@/utils/currency';
 import {
     alertController,
     IonBackButton,
