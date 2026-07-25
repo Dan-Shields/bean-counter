@@ -18,21 +18,24 @@ src/
 │   ├── HomePage.vue            # List of user's groups
 │   ├── CreateGroupPage.vue     # Create new group with members
 │   ├── JoinGroupPage.vue       # Join group via link, pick member identity
-│   ├── GroupDetailPage.vue     # Tabs: Transactions list + Balances
+│   ├── GroupDetailPage.vue     # Tabs: Transactions list + Balances + Stats
 │   ├── GroupSettingsPage.vue   # Group settings, identity, CSV export
 │   └── TransactionFormPage.vue # Create/edit transaction with splits
 ├── components/
 │   ├── TransactionList.vue     # Transaction list with filter, sort, infinite scroll
 │   ├── BalanceView.vue         # Balance bars + settlement suggestions
+│   ├── StatsView.vue           # Group expense totals + per-member paid/share
 │   └── IdentityPicker.vue      # Member identity selection with "new member" option
 ├── composables/
 │   ├── useSupabase.ts          # Supabase client singleton
 │   ├── useGroups.ts            # Group CRUD + local storage for memberships
 │   ├── useTransactions.ts      # Transaction CRUD + realtime subscriptions + pagination
-│   └── useBalances.ts          # Fetch server balances + settlement algorithm
+│   ├── useBalances.ts          # Fetch server balances + settlement algorithm
+│   └── useStats.ts             # Fetch server-side expense stats
 ├── utils/
 │   ├── settlement.ts           # Greedy algorithm to minimize transactions
 │   ├── currency.ts             # Currency list, exchange rate API (24h cache) + formatting
+│   ├── stats.ts                # Split-amount calc + GroupStats/MemberStats types
 │   └── csvExport.ts            # Transaction CSV export
 └── types/
     └── index.ts                # All TypeScript interfaces
@@ -57,7 +60,7 @@ supabase/
 
 6. **Currency conversion** - Uses free exchangerate-api.com, cached 24h in localStorage.
 
-7. **Server-side balances** - Balances are calculated by database triggers on transaction changes, stored in `member_balances` table. Client fetches pre-computed balances.
+7. **Server-side balances & stats** - Balances are calculated by database triggers on transaction changes, stored in the `member_balances` table. The same triggers also maintain expense stats in `member_stats` (per-member paid/share) and `group_stats` (group totals). Clients fetch these pre-computed values rather than aggregating locally.
 
 8. **Transaction pagination** - Transaction list uses infinite scroll, loading 20 items at a time.
 
@@ -91,6 +94,8 @@ Migrations are in `supabase/migrations/`. Key tables:
 - `transaction_splits` - transaction_id, member_id, parts OR exact_amount
 - `transaction_changelog` - audit log of all changes
 - `member_balances` - group_id, member_id, balance (auto-updated by triggers)
+- `member_stats` - group_id, member_id, paid, share (auto-updated by triggers; repayments excluded)
+- `group_stats` - group_id, total_expenses, total_refunds, expense_count (auto-updated by triggers)
 
 **Transaction types** (`transactions.type`):
 
