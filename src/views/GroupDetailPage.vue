@@ -29,11 +29,14 @@
                     <ion-segment-button value="balances">
                         <ion-label>Balances</ion-label>
                     </ion-segment-button>
+                    <ion-segment-button value="stats">
+                        <ion-label>Stats</ion-label>
+                    </ion-segment-button>
                 </ion-segment>
             </ion-toolbar>
         </ion-header>
 
-        <ion-content :fullscreen="true">
+        <ion-content ref="contentRef" :fullscreen="true">
             <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
                 <ion-refresher-content></ion-refresher-content>
             </ion-refresher>
@@ -67,11 +70,22 @@
                 />
 
                 <BalanceView
-                    v-else
+                    v-else-if="activeTab === 'balances'"
                     :balances="balances"
                     :settlements="settlements"
                     :group-currency="group?.default_currency || 'EUR'"
                     :group-id="groupId"
+                    :current-member-id="currentMemberId ?? undefined"
+                />
+
+                <div v-else-if="statsLoading" class="loading-state">
+                    <ion-spinner name="crescent"></ion-spinner>
+                </div>
+
+                <StatsView
+                    v-else-if="stats"
+                    :stats="stats"
+                    :group-currency="group?.default_currency || 'EUR'"
                     :current-member-id="currentMemberId ?? undefined"
                 />
             </template>
@@ -130,10 +144,11 @@ import {
     settingsOutline,
     shareOutline,
 } from 'ionicons/icons';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import BalanceView from '@/components/BalanceView.vue';
 import IdentityPicker from '@/components/IdentityPicker.vue';
+import StatsView from '@/components/StatsView.vue';
 import TransactionList from '@/components/TransactionList.vue';
 import { useBalances } from '@/composables/useBalances';
 import { useGroups } from '@/composables/useGroups';
@@ -145,6 +160,7 @@ import type {
     Settlement,
     TransactionWithDetails,
 } from '@/types';
+import { calculateGroupStats, type GroupStats } from '@/utils/stats';
 import {
     alertController,
     IonBackButton,
@@ -165,6 +181,7 @@ import {
     IonSpinner,
     IonTitle,
     IonToolbar,
+    onIonViewWillLeave,
     toastController,
 } from '@ionic/vue';
 import type {
@@ -181,8 +198,12 @@ const {
     saveGroupMembership,
     addMember,
 } = useGroups();
-const { getTransactions, deleteTransaction, subscribeToGroupTransactions } =
-    useTransactions();
+const {
+    getTransactions,
+    getAllTransactions,
+    deleteTransaction,
+    subscribeToGroupTransactions,
+} = useTransactions();
 const { getBalances, getSettlements } = useBalances();
 
 const groupId = route.params.groupId as string;
@@ -190,6 +211,8 @@ const group = ref<Group | null>(null);
 const members = ref<Member[]>([]);
 const transactions = ref<TransactionWithDetails[]>([]);
 const balances = ref<MemberBalance[]>([]);
+const stats = ref<GroupStats | null>(null);
+const statsLoading = ref(false);
 const activeTab = ref('expenses');
 const isLoading = ref(true);
 const hasUpdates = ref(false);
@@ -201,6 +224,9 @@ const showIdentityModal = ref(false);
 const selectedMemberId = ref<string>('');
 const newMemberName = ref('');
 const isConfirmingIdentity = ref(false);
+const contentRef = ref<InstanceType<typeof IonContent> | null>(null);
+// Scroll position saved when leaving, restored when returning from the form
+let savedScrollTop = 0;
 
 let unsubscribe: (() => void) | null = null;
 
@@ -237,23 +263,53 @@ onUnmounted(() => {
     }
 });
 
+// Save the current scroll position before navigating away (e.g. to the form)
+onIonViewWillLeave(async () => {
+    const scrollEl = await contentRef.value?.$el.getScrollElement();
+    if (scrollEl) {
+        savedScrollTop = scrollEl.scrollTop;
+    }
+});
+
 // Reload data when route becomes active (returning from expense form)
 watch(
     () => route.path,
     async (newPath) => {
         if (newPath === `/group/${groupId}`) {
             hasUpdates.value = false;
-            await loadData();
+            // Silently reload so the list doesn't flash a spinner, keep the
+            // items already loaded via infinite scroll, then restore scroll.
+            await loadData({ silent: true, preserveCount: true });
+            await restoreScrollPosition();
         }
     },
 );
 
-async function loadData() {
-    isLoading.value = true;
+async function restoreScrollPosition() {
+    if (savedScrollTop <= 0) return;
+    // Wait for the reloaded list to render before scrolling.
+    await nextTick();
+    await contentRef.value?.$el.scrollToPoint(0, savedScrollTop, 0);
+}
+
+async function loadData(options?: {
+    silent?: boolean;
+    preserveCount?: boolean;
+}) {
+    if (!options?.silent) {
+        isLoading.value = true;
+    }
     try {
         group.value = await getGroup(groupId);
         members.value = await getGroupMembers(groupId);
+        // When returning to the page, refetch as many items as were already
+        // loaded via infinite scroll so scroll position can be restored.
+        const limit =
+            options?.preserveCount && transactions.value.length > 0
+                ? transactions.value.length
+                : undefined;
         const result = await getTransactions(groupId, {
+            limit,
             sortAsc: sortAsc.value,
             memberId:
                 filter.value === 'mine'
@@ -263,12 +319,39 @@ async function loadData() {
         transactions.value = result.transactions;
         hasMoreTransactions.value = result.hasMore;
         balances.value = await getBalances(groupId);
+
+        // Invalidate stats; reload eagerly if the stats tab is showing.
+        stats.value = null;
+        if (activeTab.value === 'stats') {
+            await loadStats();
+        }
     } catch (error) {
         console.error('Error loading group data:', error);
     } finally {
-        isLoading.value = false;
+        if (!options?.silent) {
+            isLoading.value = false;
+        }
     }
 }
+
+async function loadStats() {
+    statsLoading.value = true;
+    try {
+        const allTransactions = await getAllTransactions(groupId);
+        stats.value = calculateGroupStats(allTransactions, members.value);
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    } finally {
+        statsLoading.value = false;
+    }
+}
+
+// Lazily compute stats the first time the Stats tab is opened.
+watch(activeTab, (tab) => {
+    if (tab === 'stats' && !stats.value && !statsLoading.value) {
+        loadStats();
+    }
+});
 
 async function loadMoreTransactions(event: InfiniteScrollCustomEvent) {
     try {
