@@ -107,11 +107,24 @@
                             class="amount"
                             :class="{ income: transaction.type === 'income' }"
                         >
-                            {{ transaction.type === 'income' ? '+' : ''
-                            }}{{
-                                formatAmount(
-                                    transaction.amount,
-                                    transaction.currency,
+                            {{ transaction.type === 'income' ? '+' : '' }}
+                            <span
+                                v-if="transaction.currency !== groupCurrency"
+                                class="original-amount"
+                            >
+                                {{
+                                    formatCurrency(
+                                        transaction.amount,
+                                        transaction.currency,
+                                    )
+                                }}
+                                &bull;
+                            </span>
+                            {{
+                                formatCurrency(
+                                    transaction.base_currency_amount ??
+                                        transaction.amount,
+                                    groupCurrency,
                                 )
                             }}
                         </ion-note>
@@ -218,10 +231,6 @@ function formatDate(dateStr: string): string {
     });
 }
 
-function formatAmount(amount: number, currency: string): string {
-    return formatCurrency(amount, currency);
-}
-
 function getRecipientName(transaction: TransactionWithDetails): string {
     // For repayment, the recipient is the first (and only) split member
     if (transaction.splits.length > 0) {
@@ -263,6 +272,12 @@ function getRecipientName(transaction: TransactionWithDetails): string {
 
 .amount.income {
     color: var(--ion-color-success);
+}
+
+.original-amount {
+    color: var(--ion-color-medium);
+    opacity: 0.6;
+    font-weight: 400;
 }
 
 .empty-state {
