@@ -93,19 +93,29 @@
                             </template>
                         </p>
                     </ion-label>
-                    <ion-note
-                        slot="end"
-                        class="amount"
-                        :class="{ income: transaction.type === 'income' }"
-                    >
-                        {{ transaction.type === 'income' ? '+' : ''
-                        }}{{
-                            formatAmount(
-                                transaction.amount,
-                                transaction.currency,
-                            )
-                        }}
-                    </ion-note>
+                    <div slot="end" class="end-content">
+                        <ion-icon
+                            v-if="
+                                transaction.attachments &&
+                                transaction.attachments.length > 0
+                            "
+                            :icon="imageOutline"
+                            class="attachment-indicator"
+                            color="medium"
+                        ></ion-icon>
+                        <ion-note
+                            class="amount"
+                            :class="{ income: transaction.type === 'income' }"
+                        >
+                            {{ transaction.type === 'income' ? '+' : ''
+                            }}{{
+                                formatAmount(
+                                    transaction.amount,
+                                    transaction.currency,
+                                )
+                            }}
+                        </ion-note>
+                    </div>
                 </ion-item>
 
                 <ion-item-options side="end">
@@ -144,6 +154,7 @@ import {
     arrowDownOutline,
     arrowUpOutline,
     cartOutline,
+    imageOutline,
     receiptOutline,
     swapHorizontalOutline,
     trashOutline,
@@ -282,5 +293,16 @@ function getRecipientName(transaction: TransactionWithDetails): string {
 .you-indicator {
     color: var(--ion-color-primary);
     font-weight: 600;
+}
+
+.end-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.attachment-indicator {
+    font-size: 16px;
+    opacity: 0.6;
 }
 </style>

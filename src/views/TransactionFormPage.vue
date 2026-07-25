@@ -129,6 +129,80 @@
                     ></ion-input>
                 </ion-item>
 
+                <!-- Attachments section -->
+                <ion-list-header>
+                    <ion-label>Attachments</ion-label>
+                </ion-list-header>
+
+                <div
+                    v-if="
+                        existingAttachments.length > 0 ||
+                        pendingAttachments.length > 0
+                    "
+                    class="attachments-grid"
+                >
+                    <!-- Existing attachments -->
+                    <div
+                        v-for="attachment in existingAttachments"
+                        :key="attachment.id"
+                        class="attachment-preview"
+                    >
+                        <img
+                            :src="getAttachmentUrl(attachment.storage_path)"
+                            :alt="attachment.file_name"
+                            @click="viewImage(attachment.storage_path)"
+                        />
+                        <ion-button
+                            fill="clear"
+                            color="danger"
+                            class="remove-attachment"
+                            @click="markAttachmentForDeletion(attachment.id)"
+                        >
+                            <ion-icon
+                                :icon="closeCircleOutline"
+                                slot="icon-only"
+                            ></ion-icon>
+                        </ion-button>
+                    </div>
+
+                    <!-- Pending attachments -->
+                    <div
+                        v-for="(pending, index) in pendingAttachments"
+                        :key="`pending-${index}`"
+                        class="attachment-preview"
+                    >
+                        <img
+                            :src="pending.preview"
+                            :alt="pending.fileName"
+                            @click="viewImageDataUrl(pending.preview)"
+                        />
+                        <ion-button
+                            fill="clear"
+                            color="danger"
+                            class="remove-attachment"
+                            @click="removePendingAttachment(index)"
+                        >
+                            <ion-icon
+                                :icon="closeCircleOutline"
+                                slot="icon-only"
+                            ></ion-icon>
+                        </ion-button>
+                    </div>
+                </div>
+
+                <ion-item button @click="triggerFileInput">
+                    <ion-icon :icon="cameraOutline" slot="start"></ion-icon>
+                    <ion-label>Add receipt photo</ion-label>
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        class="hidden-file-input"
+                        @change="handleFileSelect"
+                    />
+                </ion-item>
+
                 <ion-item>
                     <ion-select
                         v-model="form.payer_id"
@@ -296,23 +370,56 @@
                     </ion-buttons>
                 </ion-datetime>
             </ion-modal>
+
+            <ion-loading
+                :is-open="isCompressing"
+                message="Compressing image..."
+            ></ion-loading>
+
+            <ion-modal
+                :is-open="showImageViewer"
+                @didDismiss="showImageViewer = false"
+                class="image-viewer-modal"
+            >
+                <ion-header>
+                    <ion-toolbar>
+                        <ion-title>Attachment</ion-title>
+                        <ion-buttons slot="end">
+                            <ion-button @click="showImageViewer = false"
+                                >Close</ion-button
+                            >
+                        </ion-buttons>
+                    </ion-toolbar>
+                </ion-header>
+                <ion-content class="image-viewer-content">
+                    <img :src="viewerImageUrl" alt="Attachment" />
+                </ion-content>
+            </ion-modal>
         </ion-content>
     </ion-page>
 </template>
 
 <script setup lang="ts">
-import { alertCircleOutline, trashOutline } from 'ionicons/icons';
+import {
+    alertCircleOutline,
+    cameraOutline,
+    closeCircleOutline,
+    trashOutline,
+} from 'ionicons/icons';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useGroups } from '@/composables/useGroups';
+import { useTransactionAttachments } from '@/composables/useTransactionAttachments';
 import { useTransactions } from '@/composables/useTransactions';
 import type {
     Group,
     Member,
+    TransactionAttachment,
     TransactionFormData,
     TransactionType,
 } from '@/types';
 import { currencies, formatCurrency } from '@/utils/currency';
+import { compressImage } from '@/utils/imageCompression';
 import {
     alertController,
     IonBackButton,
@@ -328,6 +435,7 @@ import {
     IonLabel,
     IonList,
     IonListHeader,
+    IonLoading,
     IonModal,
     IonPage,
     IonSegment,
@@ -350,6 +458,8 @@ const {
     deleteTransaction,
     subscribeToTransactionDeletes,
 } = useTransactions();
+const { uploadAttachment, deleteAttachment, getAttachmentUrl } =
+    useTransactionAttachments();
 
 const groupId = route.params.groupId as string;
 const transactionId = route.params.transactionId as string | undefined;
@@ -367,6 +477,17 @@ const editingAmount = ref(false);
 const editingSplitId = ref<string | null>(null);
 const currentMemberId = ref<string | null>(null);
 const repaymentRecipientId = ref<string>('');
+
+// Attachment state
+const fileInput = ref<HTMLInputElement | null>(null);
+const isCompressing = ref(false);
+const pendingAttachments = ref<
+    { blob: Blob; preview: string; fileName: string }[]
+>([]);
+const existingAttachments = ref<TransactionAttachment[]>([]);
+const attachmentsToDelete = ref<{ id: string; storage_path: string }[]>([]);
+const showImageViewer = ref(false);
+const viewerImageUrl = ref('');
 
 let unsubscribe: (() => void) | null = null;
 
@@ -583,6 +704,11 @@ onMounted(async () => {
                         splitMode.value = 'exact';
                     }
 
+                    // Load existing attachments
+                    if (transaction.attachments) {
+                        existingAttachments.value = transaction.attachments;
+                    }
+
                     // Subscribe to delete events
                     unsubscribe = subscribeToTransactionDeletes(
                         transactionId,
@@ -723,6 +849,67 @@ function toggleSplitMode() {
     });
 }
 
+// Attachment functions
+function triggerFileInput() {
+    fileInput.value?.click();
+}
+
+async function handleFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    isCompressing.value = true;
+    try {
+        const result = await compressImage(file);
+        pendingAttachments.value.push({
+            blob: result.blob,
+            preview: result.dataUrl,
+            fileName: file.name,
+        });
+    } catch (error) {
+        console.error('Compression failed:', error);
+        const toast = await toastController.create({
+            message: 'Failed to process image',
+            duration: 2000,
+            color: 'danger',
+        });
+        await toast.present();
+    } finally {
+        isCompressing.value = false;
+        input.value = ''; // Reset input for re-selection
+    }
+}
+
+function removePendingAttachment(index: number) {
+    pendingAttachments.value.splice(index, 1);
+}
+
+function markAttachmentForDeletion(attachmentId: string) {
+    const attachment = existingAttachments.value.find(
+        (a) => a.id === attachmentId,
+    );
+    if (attachment) {
+        attachmentsToDelete.value.push({
+            id: attachment.id,
+            storage_path: attachment.storage_path,
+        });
+        existingAttachments.value = existingAttachments.value.filter(
+            (a) => a.id !== attachmentId,
+        );
+    }
+}
+
+function viewImage(storagePath: string) {
+    viewerImageUrl.value = getAttachmentUrl(storagePath);
+    showImageViewer.value = true;
+}
+
+function viewImageDataUrl(dataUrl: string) {
+    viewerImageUrl.value = dataUrl;
+    showImageViewer.value = true;
+}
+
 async function saveTransaction() {
     if (!isValid.value || !group.value) return;
 
@@ -773,6 +960,8 @@ async function saveTransaction() {
         }
 
         let success: boolean;
+        let savedTransactionId: string | undefined;
+
         if (isEditing.value && transactionId) {
             const result = await updateTransaction(
                 transactionId,
@@ -780,6 +969,7 @@ async function saveTransaction() {
                 group.value.default_currency,
             );
             success = result !== null;
+            savedTransactionId = transactionId;
         } else {
             const result = await createTransaction(
                 groupId,
@@ -787,6 +977,25 @@ async function saveTransaction() {
                 group.value.default_currency,
             );
             success = result !== null;
+            savedTransactionId = result?.id;
+        }
+
+        // Handle attachments if transaction was saved
+        if (success && savedTransactionId) {
+            // Delete marked attachments
+            for (const attachment of attachmentsToDelete.value) {
+                await deleteAttachment(attachment.id, attachment.storage_path);
+            }
+
+            // Upload new attachments
+            for (const pending of pendingAttachments.value) {
+                await uploadAttachment(
+                    groupId,
+                    savedTransactionId,
+                    pending.blob,
+                    pending.fileName,
+                );
+            }
         }
 
         const typeLabel =
@@ -930,6 +1139,40 @@ async function confirmDelete() {
 .split-summary p {
     margin: 0;
 }
+
+.attachments-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+}
+
+.attachment-preview {
+    position: relative;
+    display: inline-block;
+    align-self: flex-start;
+}
+
+.attachment-preview img {
+    max-width: 100%;
+    max-height: 300px;
+    object-fit: contain;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.remove-attachment {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    --padding-start: 0;
+    --padding-end: 0;
+    margin: 0;
+}
+
+.hidden-file-input {
+    display: none;
+}
 </style>
 
 <style>
@@ -942,5 +1185,25 @@ async function confirmDelete() {
 .date-picker-modal .ion-page {
     position: relative;
     contain: content;
+}
+
+.image-viewer-modal {
+    --width: 95vw;
+    --height: 95vh;
+    --max-width: 1200px;
+    --max-height: 900px;
+}
+
+.image-viewer-modal .image-viewer-content {
+    --background: var(--ion-color-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-viewer-modal .image-viewer-content img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 </style>

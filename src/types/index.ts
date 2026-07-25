@@ -49,10 +49,21 @@ export interface TransactionChangelog {
     changed_at: string;
 }
 
+export interface TransactionAttachment {
+    id: string;
+    transaction_id: string;
+    group_id: string;
+    storage_path: string;
+    file_name: string;
+    file_size: number;
+    created_at: string;
+}
+
 // Full transaction with related data
 export interface TransactionWithDetails extends Transaction {
     payer: Member;
     splits: (TransactionSplit & { member: Member })[];
+    attachments?: TransactionAttachment[];
 }
 
 // Balance calculation types

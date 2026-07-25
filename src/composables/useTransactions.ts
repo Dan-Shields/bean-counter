@@ -41,7 +41,8 @@ export function useTransactions() {
           splits:transaction_splits(
             *,
             member:members(*)
-          )
+          ),
+          attachments:transaction_attachments(id)
         `,
                 )
                 .eq('group_id', groupId)
@@ -111,7 +112,8 @@ export function useTransactions() {
           splits:transaction_splits(
             *,
             member:members(*)
-          )
+          ),
+          attachments:transaction_attachments(id)
         `,
                 )
                 .eq('group_id', groupId)
@@ -147,7 +149,8 @@ export function useTransactions() {
           splits:transaction_splits(
             *,
             member:members(*)
-          )
+          ),
+          attachments:transaction_attachments(*)
         `,
                 )
                 .eq('id', transactionId)
