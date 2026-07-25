@@ -407,7 +407,7 @@ import {
     trashOutline,
 } from 'ionicons/icons';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useGroups } from '@/composables/useGroups';
 import { useTransactionAttachments } from '@/composables/useTransactionAttachments';
 import { useTransactions } from '@/composables/useTransactions';
@@ -490,6 +490,11 @@ const showImageViewer = ref(false);
 const viewerImageUrl = ref('');
 
 let unsubscribe: (() => void) | null = null;
+
+// Unsaved-changes tracking: snapshot the form once loaded, then compare
+// against it to detect edits and warn before leaving.
+const initialSnapshot = ref<string | null>(null);
+const bypassGuard = ref(false);
 
 const form = ref<TransactionFormData>({
     type: 'expense',
@@ -613,6 +618,58 @@ const remainderPerPerson = computed(() => {
     return remainingAmount.value / unassignedCount.value;
 });
 
+// Serialize the parts of the form a user can edit, so we can detect changes.
+function getFormSnapshot(): string {
+    return JSON.stringify({
+        form: form.value,
+        repaymentRecipientId: repaymentRecipientId.value,
+        splitMode: splitMode.value,
+        pendingAttachments: pendingAttachments.value.length,
+        attachmentsToDelete: attachmentsToDelete.value.length,
+    });
+}
+
+const isDirty = computed(() => {
+    if (initialSnapshot.value === null) return false;
+    return getFormSnapshot() !== initialSnapshot.value;
+});
+
+// Prompt before leaving with unsaved changes. Resolves true to discard and
+// leave, false to stay. Saves/deletes set bypassGuard to skip this.
+function confirmDiscard(): Promise<boolean> {
+    return new Promise((resolve) => {
+        alertController
+            .create({
+                header: 'Discard changes?',
+                message: 'You have unsaved changes that will be lost.',
+                buttons: [
+                    {
+                        text: 'Keep editing',
+                        role: 'cancel',
+                        handler: () => resolve(false),
+                    },
+                    {
+                        text: 'Discard',
+                        role: 'destructive',
+                        handler: () => resolve(true),
+                    },
+                ],
+            })
+            .then((alert) => {
+                // Dismissing via backdrop keeps the user on the page.
+                alert.onDidDismiss().then(() => resolve(false));
+                alert.present();
+            });
+    });
+}
+
+onBeforeRouteLeave(async () => {
+    if (bypassGuard.value || isDeleted.value || !isDirty.value) {
+        return true;
+    }
+    return await confirmDiscard();
+});
+
 onMounted(async () => {
     try {
         group.value = await getGroup(groupId);
@@ -723,6 +780,8 @@ onMounted(async () => {
         console.error('Error loading data:', error);
     } finally {
         isLoading.value = false;
+        // Snapshot after all pre-fill/loading so initial state isn't "dirty".
+        initialSnapshot.value = getFormSnapshot();
     }
 });
 
@@ -1013,6 +1072,7 @@ async function saveTransaction() {
                 color: 'success',
             });
             await toast.present();
+            bypassGuard.value = true;
             router.back();
         } else {
             throw new Error('Failed to save transaction');
@@ -1053,6 +1113,7 @@ async function confirmDelete() {
                             duration: 2000,
                         });
                         await toast.present();
+                        bypassGuard.value = true;
                         router.replace(`/group/${groupId}`);
                     } else {
                         const toast = await toastController.create({
