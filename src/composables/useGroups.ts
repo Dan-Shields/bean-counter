@@ -33,6 +33,15 @@ export function useGroups() {
     }
 
     /**
+     * Remove a group from the user's local storage memberships.
+     * Does not modify any data in the database.
+     */
+    function leaveGroup(groupId: string) {
+        const groups = getUserGroups().filter((g) => g.group_id !== groupId);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(groups));
+    }
+
+    /**
      * Get which member represents the user in a group
      */
     function getUserMemberIdForGroup(groupId: string): string | null {
@@ -187,6 +196,7 @@ export function useGroups() {
     return {
         getUserGroups,
         saveGroupMembership,
+        leaveGroup,
         getUserMemberIdForGroup,
         createGroup,
         getGroup,
