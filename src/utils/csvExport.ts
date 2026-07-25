@@ -1,4 +1,5 @@
 import type { Member, TransactionWithDetails } from '@/types';
+import { calculateSplitAmounts } from '@/utils/stats';
 
 /**
  * Escapes a value for CSV format.
@@ -10,55 +11,6 @@ function escapeCSV(value: string | number): string {
         return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
-}
-
-/**
- * Calculates the split amount for each member in a transaction.
- * Returns a map of member_id -> amount in the base currency.
- */
-function calculateSplitAmounts(
-    transaction: TransactionWithDetails,
-): Map<string, number> {
-    const amounts = new Map<string, number>();
-    const baseAmount = transaction.base_currency_amount ?? transaction.amount;
-
-    // Check if using exact amounts or parts
-    const hasExactAmounts = transaction.splits.some(
-        (s) => s.exact_amount != null,
-    );
-
-    if (hasExactAmounts) {
-        // Exact amount mode - convert to base currency proportionally
-        const totalExact = transaction.splits.reduce(
-            (sum, s) => sum + (s.exact_amount ?? 0),
-            0,
-        );
-        const conversionRate = totalExact > 0 ? baseAmount / totalExact : 1;
-
-        for (const split of transaction.splits) {
-            const exactAmount = split.exact_amount ?? 0;
-            const convertedAmount = exactAmount * conversionRate;
-            amounts.set(
-                split.member_id,
-                Math.round(convertedAmount * 100) / 100,
-            );
-        }
-    } else {
-        // Parts mode - calculate proportional amounts from base currency
-        const totalParts = transaction.splits.reduce(
-            (sum, s) => sum + (s.parts ?? 1),
-            0,
-        );
-
-        for (const split of transaction.splits) {
-            const parts = split.parts ?? 1;
-            const amount = (baseAmount * parts) / totalParts;
-            // Round to 2 decimal places
-            amounts.set(split.member_id, Math.round(amount * 100) / 100);
-        }
-    }
-
-    return amounts;
 }
 
 /**

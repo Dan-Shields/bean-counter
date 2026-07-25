@@ -152,6 +152,7 @@ import StatsView from '@/components/StatsView.vue';
 import TransactionList from '@/components/TransactionList.vue';
 import { useBalances } from '@/composables/useBalances';
 import { useGroups } from '@/composables/useGroups';
+import { useStats } from '@/composables/useStats';
 import { useTransactions } from '@/composables/useTransactions';
 import type {
     Group,
@@ -160,7 +161,7 @@ import type {
     Settlement,
     TransactionWithDetails,
 } from '@/types';
-import { calculateGroupStats, type GroupStats } from '@/utils/stats';
+import type { GroupStats } from '@/utils/stats';
 import {
     alertController,
     IonBackButton,
@@ -198,13 +199,10 @@ const {
     saveGroupMembership,
     addMember,
 } = useGroups();
-const {
-    getTransactions,
-    getAllTransactions,
-    deleteTransaction,
-    subscribeToGroupTransactions,
-} = useTransactions();
+const { getTransactions, deleteTransaction, subscribeToGroupTransactions } =
+    useTransactions();
 const { getBalances, getSettlements } = useBalances();
+const { getStats } = useStats();
 
 const groupId = route.params.groupId as string;
 const group = ref<Group | null>(null);
@@ -337,8 +335,7 @@ async function loadData(options?: {
 async function loadStats() {
     statsLoading.value = true;
     try {
-        const allTransactions = await getAllTransactions(groupId);
-        stats.value = calculateGroupStats(allTransactions, members.value);
+        stats.value = await getStats(groupId);
     } catch (error) {
         console.error('Error loading stats:', error);
     } finally {
