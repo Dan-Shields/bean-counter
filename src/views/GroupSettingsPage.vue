@@ -89,21 +89,41 @@
                         </ion-label>
                     </ion-item>
                 </ion-list>
+
+                <ion-list-header>
+                    <ion-label>Leave</ion-label>
+                </ion-list-header>
+                <ion-list>
+                    <ion-item button @click="confirmLeaveGroup">
+                        <ion-icon
+                            :icon="exitOutline"
+                            slot="start"
+                            color="danger"
+                        ></ion-icon>
+                        <ion-label color="danger">Leave group</ion-label>
+                    </ion-item>
+                </ion-list>
+                <p class="leave-note ion-padding-horizontal">
+                    Removes this group from your home page. Nothing is deleted —
+                    other members keep their data, and you can rejoin with the
+                    invite link.
+                </p>
             </template>
         </ion-content>
     </ion-page>
 </template>
 
 <script setup lang="ts">
-import { downloadOutline, shareOutline } from 'ionicons/icons';
+import { downloadOutline, exitOutline, shareOutline } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import IdentityPicker from '@/components/IdentityPicker.vue';
 import { useGroups } from '@/composables/useGroups';
 import { useTransactions } from '@/composables/useTransactions';
 import type { Group, Member } from '@/types';
 import { downloadCSV, generateTransactionCSV } from '@/utils/csvExport';
 import {
+    alertController,
     IonBackButton,
     IonButton,
     IonButtons,
@@ -123,11 +143,13 @@ import {
 } from '@ionic/vue';
 
 const route = useRoute();
+const router = useRouter();
 const {
     getGroup,
     getGroupMembers,
     getUserMemberIdForGroup,
     saveGroupMembership,
+    leaveGroup,
     addMember,
     updateGroup,
 } = useGroups();
@@ -319,6 +341,26 @@ async function exportTransactions() {
         isExporting.value = false;
     }
 }
+
+async function confirmLeaveGroup() {
+    const alert = await alertController.create({
+        header: 'Leave group?',
+        message:
+            'This only removes the group from your home page. No data will be deleted and you can rejoin later with the invite link.',
+        buttons: [
+            { text: 'Cancel', role: 'cancel' },
+            {
+                text: 'Leave',
+                role: 'destructive',
+                handler: () => {
+                    leaveGroup(groupId);
+                    router.replace('/home');
+                },
+            },
+        ],
+    });
+    await alert.present();
+}
 </script>
 
 <style scoped>
@@ -326,5 +368,11 @@ async function exportTransactions() {
     display: flex;
     justify-content: center;
     padding: 48px;
+}
+
+.leave-note {
+    color: var(--ion-color-medium);
+    font-size: 0.8rem;
+    margin-top: 4px;
 }
 </style>
